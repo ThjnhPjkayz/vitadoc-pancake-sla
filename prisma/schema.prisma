@@ -1,0 +1,197 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================================
+// Pages — Danh sách page từ Pancake
+// ============================================================
+model Page {
+  id               String   @id // page_id từ Pancake (vd: tt_7582800065863402517)
+  name             String
+  username         String?
+  platform         String   // tiktok | facebook | personal_zalo | tiktok_business_messaging
+  avatarUrl        String?
+  isActivated      Boolean  @default(true)
+  shopId           Int?
+  timezone         Float?
+  pageAccessToken  String?  // token riêng của page để gọi conversations
+  connected        Boolean  @default(true)
+  rawData          Json?
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  conversations    Conversation[]
+  messages         Message[]
+  slaViolations    SLAViolation[]
+
+  @@index([platform])
+  @@index([isActivated])
+}
+
+// ============================================================
+// Conversations — Hội thoại trong page
+// ============================================================
+model Conversation {
+  id               String   @id // conversation_id (vd: tt_0:1:6851107592153318401:7618915631207744530)
+  pageId           String
+  type             String   // INBOX | COMMENT
+  snippet          String?  @db.Text
+  messageCount     Int      @default(0)
+  seen             Boolean  @default(false)
+  hasPhone         Boolean  @default(false)
+  postId           String?
+
+  // Thông tin khách hàng
+  customerId       String?
+  customerName     String?
+  customerUsername String?
+
+  // Thông tin người gửi cuối
+  lastSentById     String?
+  lastSentByName   String?
+
+  // Assignee
+  assigneeIds      Json?
+
+  // Timestamps từ Pancake
+  insertedAt       DateTime?
+  updatedAtConv    DateTime?
+
+  // Raw data
+  rawData          Json?
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  page             Page            @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  messages         Message[]
+  slaViolations    SLAViolation[]
+
+  @@index([pageId])
+  @@index([customerId])
+  @@index([insertedAt])
+  @@index([seen])
+}
+
+// ============================================================
+// Messages — Tin nhắn trong hội thoại
+// ============================================================
+model Message {
+  id               String   @id // message_id
+  conversationId   String
+  pageId           String
+
+  message          String?  @db.Text
+  type             String   // INBOX | COMMENT | PRIVATE_REPLY
+
+  // Thông tin người gửi
+  fromId           String?
+  fromName         String?
+  fromUsername     String?
+
+  // Phân loại: khách hàng hay admin/staff
+  isFromCustomer   Boolean  @default(false)
+  isFromAdmin      Boolean  @default(false)
+
+  seen             Boolean  @default(false)
+  hasPhone         Boolean  @default(false)
+
+  // Attachments
+  attachments      Json?
+
+  // Timestamps
+  insertedAt       DateTime?
+
+  // Raw data
+  rawData          Json?
+
+  createdAt        DateTime @default(now())
+
+  conversation     Conversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  page             Page           @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([pageId])
+  @@index([isFromCustomer])
+  @@index([isFromAdmin])
+  @@index([insertedAt])
+}
+
+// ============================================================
+// SLA Violations — Vi phạm SLA
+// ============================================================
+model SLAViolation {
+  id                      String   @id @default(cuid())
+  conversationId          String
+  pageId                  String
+
+  // Message đầu tiên của khách hàng
+  customerMessageId       String
+  customerMessageAt       DateTime
+
+  // Message phản hồi đầu tiên của admin/staff
+  adminReplyMessageId     String?
+  adminReplyAt            DateTime?
+
+  // Thời gian phản hồi (phút)
+  responseTimeMinutes     Int?
+
+  // Có vi phạm SLA không (>15 phút)
+  isLateReply             Boolean  @default(false)
+
+  // SLA threshold đã dùng (mặc định 15 phút)
+  slaThresholdMinutes     Int      @default(15)
+
+  // Trạng thái SLA: on-time | late | pending (chưa phản hồi)
+  slaStatus               String?
+
+  // Loại conversation: INBOX | COMMENT
+  conversationType        String?
+
+  // Thời gian phản hồi thực tế (chỉ tính trong giờ làm việc)
+  effectiveResponseMinutes Int?
+
+  // Tin nhắn của khách có nằm ngoài giờ làm việc không
+  outsideBusinessHours    Boolean  @default(false)
+
+  // Nhóm SLA để phân loại
+  slaGroup                String?
+
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  conversation            Conversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  page                    Page           @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@index([isLateReply])
+  @@index([pageId])
+  @@index([customerMessageAt])
+}
+
+// ============================================================
+// SyncHistory — Lịch sử các lần đồng bộ
+// ============================================================
+model SyncHistory {
+  id                  String    @id @default(cuid())
+  startedAt           DateTime  @default(now())
+  completedAt         DateTime?
+  status              String    @default("running") // running | success | failed
+  pagesCount          Int       @default(0)
+  conversationsCount  Int       @default(0)
+  messagesCount       Int       @default(0)
+  slaChecked          Int       @default(0)
+  errors              Json?
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([status])
+  @@index([startedAt])
+}
