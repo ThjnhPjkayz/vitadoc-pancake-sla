@@ -4,6 +4,7 @@
 // GET    /api/sync?history=true — Lấy lịch sử sync
 // ============================================================
 
+import { waitUntil } from "@vercel/functions";
 import { syncAllPages } from "@/lib/services/sync";
 import { prisma } from "@/lib/prisma";
 
@@ -35,10 +36,10 @@ export async function POST(request: Request) {
 
   const force = new URL(request.url).searchParams.get("force") === "true";
 
-  // Fire-and-forget — không await, trả về ngay
-  syncAllPages(force).catch((err) =>
+  // Giữ function sống đến khi sync xong (Vercel waitUntil)
+  waitUntil(syncAllPages(force).catch((err) =>
     console.error("[Sync] Background sync failed:", err)
-  );
+  ));
 
   return Response.json({ success: true, started: true });
 }
