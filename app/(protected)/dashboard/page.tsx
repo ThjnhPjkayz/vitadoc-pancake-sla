@@ -142,7 +142,10 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchStats();
     fetchTrend();
-    checkSyncStatus();
+    // Khôi phục trạng thái sync nếu đang chạy dở
+    checkSyncStatus().then((status) => {
+      if (status === "running") setSyncing(true);
+    });
   }, []);
 
   return (
