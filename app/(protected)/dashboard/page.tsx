@@ -153,14 +153,21 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button disabled className="bg-emerald-600 hover:bg-emerald-700 text-white opacity-50 cursor-not-allowed">
-            <CloudDownload className="w-4 h-4" />
-            {t.dashboard.sync}
+          <Button onClick={() => handleSync(false)} disabled={syncing} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+            {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />}
+            {syncing ? t.dashboard.syncing : t.dashboard.sync}
           </Button>
-          <Button variant="outline" disabled className="opacity-50 cursor-not-allowed">
-            <CloudDownload className="w-4 h-4" />
-            {t.dashboard.fullSync}
-          </Button>
+          {syncing ? (
+            <Button variant="outline" onClick={handleStopSync} className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700">
+              <XCircle className="w-4 h-4" />
+              {t.common.stop}
+            </Button>
+          ) : (
+            <Button variant="outline" onClick={() => handleSync(true)}>
+              <CloudDownload className="w-4 h-4" />
+              {t.dashboard.fullSync}
+            </Button>
+          )}
           <Button variant="outline" onClick={() => { fetchStats(); fetchTrend(); }}>
             <RefreshCw className="w-4 h-4" />
             {t.common.refresh}
