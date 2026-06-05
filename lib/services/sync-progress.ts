@@ -76,7 +76,7 @@ export async function flushToDB(syncHistoryId: string): Promise<void> {
   try {
     await prisma.syncHistory.update({
       where: { id: syncHistoryId },
-      data: { progressSnapshot: _progress as unknown as Record<string, unknown> },
+      data: { progressSnapshot: JSON.parse(JSON.stringify(_progress)) },
     });
   } catch {
     // Non-critical — don't fail sync if flush fails
