@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 4000",
-    "build": "prisma migrate deploy && next build",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "create-user": "npx tsx scripts/create-user.ts"
