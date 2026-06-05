@@ -132,7 +132,7 @@ export default function FiltersBar({
       <FilterField label={t.filters.page}>
         <Select
           value={filters.pageId || ALL}
-          onValueChange={(v) => update("pageId", v === ALL ? "" : v)}
+          onValueChange={(v) => update("pageId", v === ALL ? "" : (v ?? ""))}
         >
           <SelectTrigger className="min-w-[130px]">
             <SelectValue>{pageDisplayLabel}</SelectValue>
@@ -152,7 +152,7 @@ export default function FiltersBar({
       <FilterField label={t.filters.platform}>
         <Select
           value={filters.platform || ALL}
-          onValueChange={(v) => update("platform", v === ALL ? "" : v)}
+          onValueChange={(v) => update("platform", v === ALL ? "" : (v ?? ""))}
         >
           <SelectTrigger className="min-w-[130px]">
             <SelectValue>{platformDisplayLabel}</SelectValue>
@@ -172,7 +172,7 @@ export default function FiltersBar({
       <FilterField label={t.filters.slaStatus}>
         <Select
           value={filters.slaStatus || ALL}
-          onValueChange={(v) => update("slaStatus", v === ALL ? "" : v)}
+          onValueChange={(v) => update("slaStatus", v === ALL ? "" : (v ?? ""))}
         >
           <SelectTrigger className="min-w-[150px]">
             <SelectValue>{slaDisplayLabel}</SelectValue>
@@ -191,7 +191,7 @@ export default function FiltersBar({
       <FilterField label={t.filters.hours}>
         <Select
           value={filters.hoursFilter || ALL}
-          onValueChange={(v) => update("hoursFilter", v === ALL ? "" : v)}
+          onValueChange={(v) => update("hoursFilter", v === ALL ? "" : (v ?? ""))}
         >
           <SelectTrigger className="min-w-[140px]">
             <SelectValue>{hoursDisplayLabel}</SelectValue>
