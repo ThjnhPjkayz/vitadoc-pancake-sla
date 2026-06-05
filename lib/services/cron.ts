@@ -21,15 +21,15 @@ export function startSyncJob(): void {
     return;
   }
 
-  // Chạy lúc 23:59 hàng ngày
-  const cronExpression = "59 23 * * *";
+  // Chạy lúc 23:59 giờ Việt Nam (UTC+7 → 16:59 UTC)
+  const cronExpression = "59 16 * * *";
 
   syncJob = cron.schedule(cronExpression, async () => {
     console.log(`[Cron/Sync] ⏰ Triggered at ${new Date().toISOString()}`);
     await runSyncWithRetry();
   });
 
-  console.log(`[Cron/Sync] 🕐 Scheduled at 23:59 daily (${cronExpression})`);
+  console.log(`[Cron/Sync] 🕐 Scheduled at 23:59 VN time daily (${cronExpression})`);
 }
 
 export function stopSyncJob(): void {
