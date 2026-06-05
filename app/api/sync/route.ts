@@ -5,6 +5,7 @@
 // ============================================================
 
 import { syncAllPages } from "@/lib/services/sync";
+import { getSyncProgress } from "@/lib/services/sync-progress";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -118,5 +119,6 @@ export async function GET(request: Request) {
   return Response.json({
     success: true,
     lastSync: lastSync ?? null,
+    progress: getSyncProgress(),
   });
 }

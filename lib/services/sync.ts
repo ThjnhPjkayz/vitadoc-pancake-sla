@@ -13,6 +13,12 @@ import {
   getMessages,
 } from "@/lib/services/pancake-api";
 import { calculateSLAForConversation } from "@/lib/services/sla";
+import {
+  startProgress,
+  updatePageProgress,
+  updateCounts,
+  endProgress,
+} from "@/lib/services/sync-progress";
 import type {
   PancakePage,
   PancakeConversation,
@@ -65,6 +71,7 @@ export async function syncAllPages(force = false): Promise<SyncStats> {
   }
 
   console.log("[Sync] 🚀 Starting full sync...");
+  startProgress(0);
 
   // --- Lấy thời gian sync thành công gần nhất để incremental sync ---
   let since: Date | undefined;
@@ -94,8 +101,10 @@ export async function syncAllPages(force = false): Promise<SyncStats> {
     const pagesRes = await getPages();
     pages = pagesRes.categorized.activated;
     console.log(`[Sync] ✅ Got ${pages.length} activated pages`);
+    startProgress(pages.length);
   } catch (err) {
     stats.errors.push(`Failed to fetch pages: ${String(err)}`);
+    endProgress();
     return stats;
   }
 
@@ -115,16 +124,20 @@ export async function syncAllPages(force = false): Promise<SyncStats> {
       }
     }
 
+    updatePageProgress(pages.indexOf(page) + 1, page.id, page.name);
+
     try {
       await syncSinglePage(page, stats, since);
     } catch (err) {
       stats.errors.push(`Page ${page.id} (${page.name}): ${String(err)}`);
+      updateCounts({ errors: 1 });
     }
 
     // Rate limit safety: chờ 500ms giữa các page
     await new Promise((r) => setTimeout(r, 500));
   }
 
+  endProgress();
   console.log(cancelled ? "[Sync] ⛔ Stopped." : "[Sync] ✅ Done!", stats);
 
   // --- Cập nhật SyncHistory ---
@@ -292,6 +305,7 @@ async function syncSingleConversation(
     },
   });
   stats.conversations.upserted++;
+  updateCounts({ conversations: 1 });
 
   // --- Fetch messages (skip nếu message_count không đổi so với DB) ---
   const existingMsgCount = await prisma.message.count({
@@ -338,11 +352,13 @@ async function syncSingleConversation(
       skipDuplicates: true,
     });
     stats.messages.upserted += result.count;
+    updateCounts({ messages: result.count });
   }
 
   // --- Tính SLA — chỉ khi có message mới ---
   if (needsFetch) {
     await calculateSLAForConversation(conv.id, pageId);
     stats.slaChecked++;
+    updateCounts({ slaChecked: 1 });
   }
 }

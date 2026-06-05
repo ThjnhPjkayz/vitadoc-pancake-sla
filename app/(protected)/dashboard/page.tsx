@@ -32,6 +32,13 @@ export default function DashboardPage() {
     type: "success" | "error";
     message: string;
   } | null>(null);
+  const [syncProgress, setSyncProgress] = useState<{
+    currentPageName: string | null;
+    currentPageIndex: number;
+    totalPages: number;
+    conversations: number;
+    messages: number;
+  } | null>(null);
 
   const fetchStats = useCallback(async () => {
     setStatsLoading(true);
@@ -65,6 +72,17 @@ export default function DashboardPage() {
       const json = await res.json();
       if (!json.success) return null;
       if (json.lastSync?.completedAt) setLastSyncAt(json.lastSync.completedAt);
+      if (json.progress?.isRunning) {
+        setSyncProgress({
+          currentPageName: json.progress.currentPageName,
+          currentPageIndex: json.progress.currentPageIndex,
+          totalPages: json.progress.totalPages,
+          conversations: json.progress.conversations,
+          messages: json.progress.messages,
+        });
+      } else {
+        setSyncProgress(null);
+      }
       return json.lastSync?.status ?? null;
     } catch {
       return null;
@@ -189,7 +207,20 @@ export default function DashboardPage() {
           {syncing ? (
             <>
               <Loader2 className="w-4 h-4 flex-shrink-0 animate-spin" />
-              <span>{t.dashboard.syncingMessage}</span>
+              <div className="flex flex-col gap-0.5">
+                <span>{t.dashboard.syncingMessage}</span>
+                {syncProgress && (
+                  <span className="text-xs font-normal opacity-80">
+                    {syncProgress.currentPageName
+                      ? `📄 ${syncProgress.currentPageIndex}/${syncProgress.totalPages} — ${syncProgress.currentPageName}`
+                      : `📄 ${syncProgress.currentPageIndex}/${syncProgress.totalPages} pages`}
+                    {" · "}
+                    {syncProgress.conversations.toLocaleString()} conversations
+                    {" · "}
+                    {syncProgress.messages.toLocaleString()} messages
+                  </span>
+                )}
+              </div>
             </>
           ) : syncResult?.type === "success" ? (
             <>
