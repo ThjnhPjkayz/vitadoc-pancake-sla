@@ -170,7 +170,7 @@ export async function syncAllPages(force = false): Promise<SyncStats> {
 // Sync Single Page
 // ----------------------------------------------------------------
 
-async function syncSinglePage(
+export async function syncSinglePage(
   page: PancakePage,
   stats: SyncStats,
   since?: Date

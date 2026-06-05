@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   RefreshCw,
   CloudDownload,
@@ -43,6 +43,7 @@ export default function DashboardPage() {
     conversations: number;
     messages: number;
   } | null>(null);
+  const syncCancelledRef = useRef(false);
 
   const fetchStats = useCallback(async () => {
     setStatsLoading(true);
@@ -105,46 +106,89 @@ export default function DashboardPage() {
   const handleSync = useCallback(async (force = false) => {
     if (syncing) return;
     setSyncResult(null);
+    setSyncProgress(null);
+    syncCancelledRef.current = false;
+
+    let syncId: string | null = null;
+    const totals = { pages: 0, conversations: 0, messages: 0, slaChecked: 0, errors: [] as string[] };
+
     try {
+      // Step 1: Init sync — get syncId + pages list
       const url = force ? "/api/sync?force=true" : "/api/sync";
-      const res = await fetch(url, { method: "POST" });
-      const json = await res.json();
-      if (!json.success) {
-        setSyncResult({ type: "error", message: json.error ?? t.dashboard.syncFailed });
+      const initRes = await fetch(url, { method: "POST" });
+      const initJson = await initRes.json();
+      if (!initJson.success) {
+        setSyncResult({ type: "error", message: initJson.error ?? t.dashboard.syncFailed });
         return;
       }
+
+      syncId = initJson.syncId as string;
+      const pages = initJson.pages as { id: string; name: string; [key: string]: unknown }[];
+      const since = initJson.since as string | null;
+
       setSyncing(true);
-    } catch {
-      setSyncResult({ type: "error", message: t.dashboard.cannotConnect });
-    }
-  }, [syncing, t]);
+      setSyncProgress({ currentPageName: null, currentPageIndex: 0, totalPages: pages.length, conversations: 0, messages: 0 });
 
-  const handleStopSync = useCallback(async () => {
-    await fetch("/api/sync", { method: "DELETE" });
-  }, []);
+      // Step 2: Sync one page at a time
+      let cancelled = false;
+      for (let i = 0; i < pages.length; i++) {
+        if (syncCancelledRef.current) { cancelled = true; break; }
 
-  useEffect(() => {
-    if (!syncing) return;
-    const interval = setInterval(async () => {
-      const status = await checkSyncStatus();
-      if (status === "success") {
-        setSyncing(false);
+        const page = pages[i];
+        setSyncProgress({ currentPageName: page.name, currentPageIndex: i + 1, totalPages: pages.length, conversations: totals.conversations, messages: totals.messages });
+
+        const pageRes = await fetch("/api/sync/page", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ syncId, pageIndex: i + 1, totalPages: pages.length, page, since }),
+        });
+        const pageJson = await pageRes.json();
+
+        if (pageJson.cancelled) { cancelled = true; break; }
+        if (pageJson.success && pageJson.stats) {
+          totals.pages += pageJson.stats.pages.upserted;
+          totals.conversations += pageJson.stats.conversations.upserted;
+          totals.messages += pageJson.stats.messages.upserted;
+          totals.slaChecked += pageJson.stats.slaChecked;
+          totals.errors.push(...(pageJson.stats.errors ?? []));
+          setSyncProgress({ currentPageName: page.name, currentPageIndex: i + 1, totalPages: pages.length, conversations: totals.conversations, messages: totals.messages });
+        }
+      }
+
+      // Step 3: Finalize
+      await fetch("/api/sync/finalize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ syncId, pagesCount: totals.pages, conversationsCount: totals.conversations, messagesCount: totals.messages, slaChecked: totals.slaChecked, errors: totals.errors, cancelled }),
+      });
+
+      setSyncing(false);
+      setSyncProgress(null);
+      if (cancelled) {
+        setSyncResult({ type: "error", message: t.dashboard.syncStopped });
+      } else {
         setSyncResult({ type: "success", message: t.dashboard.syncSuccess });
         fetchStats();
         fetchTrend(chartPeriod);
-        clearInterval(interval);
-      } else if (status === "failed") {
-        setSyncing(false);
-        setSyncResult({ type: "error", message: t.dashboard.syncFailed });
-        clearInterval(interval);
-      } else if (status === "cancelled") {
-        setSyncing(false);
-        setSyncResult({ type: "error", message: t.dashboard.syncStopped });
-        clearInterval(interval);
       }
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [syncing, checkSyncStatus, fetchStats, fetchTrend, t]);
+    } catch (err) {
+      setSyncing(false);
+      setSyncProgress(null);
+      if (syncId) {
+        fetch("/api/sync/finalize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ syncId, errors: [String(err)], cancelled: false }),
+        }).catch(() => {});
+      }
+      setSyncResult({ type: "error", message: t.dashboard.cannotConnect });
+    }
+  }, [syncing, t, fetchStats, fetchTrend, chartPeriod]);
+
+  const handleStopSync = useCallback(async () => {
+    syncCancelledRef.current = true;
+    await fetch("/api/sync", { method: "DELETE" });
+  }, []);
 
   useEffect(() => {
     if (!syncResult) return;
