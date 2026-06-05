@@ -189,6 +189,7 @@ model SyncHistory {
   messagesCount       Int       @default(0)
   slaChecked          Int       @default(0)
   errors              Json?
+  progressSnapshot    Json?
 
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt

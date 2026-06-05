@@ -18,6 +18,7 @@ import {
   updatePageProgress,
   updateCounts,
   endProgress,
+  flushToDB,
 } from "@/lib/services/sync-progress";
 import type {
   PancakePage,
@@ -125,6 +126,7 @@ export async function syncAllPages(force = false): Promise<SyncStats> {
     }
 
     updatePageProgress(pages.indexOf(page) + 1, page.id, page.name);
+    if (syncRecord) await flushToDB(syncRecord.id);
 
     try {
       await syncSinglePage(page, stats, since);

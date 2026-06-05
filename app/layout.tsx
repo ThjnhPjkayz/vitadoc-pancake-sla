@@ -26,13 +26,13 @@ export const metadata: Metadata = {
     title: "Pancake SLA Monitor",
     description: "Internal dashboard theo dõi hiệu suất phản hồi tin nhắn trên các trang Pancake",
     type: "website",
-    images: [{ url: "/og-image.png", width: 1200, height: 630 }],
+    images: [{ url: "https://vitadoc-pancake-sla.vercel.app/og-image.png", width: 1200, height: 630 }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Pancake SLA Monitor",
     description: "Internal dashboard theo dõi hiệu suất phản hồi tin nhắn trên các trang Pancake",
-    images: ["/og-image.png"],
+    images: ["https://vitadoc-pancake-sla.vercel.app/og-image.png"],
   },
 };
 

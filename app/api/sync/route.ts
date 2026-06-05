@@ -5,10 +5,10 @@
 // ============================================================
 
 import { syncAllPages } from "@/lib/services/sync";
-import { getSyncProgress } from "@/lib/services/sync-progress";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function POST(request: Request) {
   if (process.env.NODE_ENV === "development") {
@@ -105,7 +105,7 @@ export async function GET(request: Request) {
     }
   }
 
-  // Trạng thái sync gần nhất
+  // Trạng thái sync gần nhất + progress từ DB
   const lastSync = await prisma.syncHistory.findFirst({
     orderBy: { startedAt: "desc" },
     select: {
@@ -116,12 +116,17 @@ export async function GET(request: Request) {
       pagesCount: true,
       conversationsCount: true,
       messagesCount: true,
+      progressSnapshot: true,
     },
   });
+
+  const progress = lastSync?.status === "running" && lastSync.progressSnapshot
+    ? lastSync.progressSnapshot
+    : { isRunning: false };
 
   return Response.json({
     success: true,
     lastSync: lastSync ?? null,
-    progress: getSyncProgress(),
+    progress,
   });
 }

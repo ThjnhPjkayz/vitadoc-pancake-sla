@@ -1,4 +1,6 @@
-// In-memory sync progress — shared within the same Node.js process
+// Sync progress — in-memory within one function execution, flushed to DB for cross-request reads
+
+import { prisma } from "@/lib/prisma";
 
 export interface SyncProgress {
   isRunning: boolean;
@@ -67,4 +69,16 @@ export function endProgress(): void {
   _progress.isRunning = false;
   _progress.currentPage = null;
   _progress.currentPageName = null;
+}
+
+// Flush in-memory progress to DB so other serverless instances can read it
+export async function flushToDB(syncHistoryId: string): Promise<void> {
+  try {
+    await prisma.syncHistory.update({
+      where: { id: syncHistoryId },
+      data: { progressSnapshot: _progress as unknown as Record<string, unknown> },
+    });
+  } catch {
+    // Non-critical — don't fail sync if flush fails
+  }
 }
