@@ -137,9 +137,10 @@ export async function getAllConversations(
     if (batch.length === 0) break;
 
     // Incremental sync: dừng sớm nếu toàn bộ batch cũ hơn since
+    // null updated_at → coi là "có thể mới" để tránh bỏ sót
     if (since) {
       const hasNewConv = batch.some(
-        (c) => c.updated_at && new Date(c.updated_at) >= since
+        (c) => !c.updated_at || new Date(c.updated_at + "+07:00") >= since
       );
       if (!hasNewConv) break;
     }

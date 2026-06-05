@@ -11,22 +11,33 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
 
   try {
-    // Nếu có ?options=true → trả về filter options
     if (searchParams.get("options") === "true") {
       const options = await getFilterOptions();
       return Response.json({ success: true, options });
     }
 
-    // Ngược lại → trả về conversations
+    const slaStatusRaw = searchParams.get("slaStatus");
+    const validStatuses = ["on-time", "late", "no-reply", "needs-attention", "outbound"];
+    const slaStatus = validStatuses.includes(slaStatusRaw ?? "")
+      ? (slaStatusRaw as "on-time" | "late" | "no-reply" | "needs-attention" | "outbound")
+      : undefined;
+
+    const hoursRaw = searchParams.get("hoursFilter");
+    const hoursFilter = hoursRaw === "in-hours" || hoursRaw === "after-hours"
+      ? hoursRaw
+      : undefined;
+
+    const typeRaw = searchParams.get("conversationType");
+    const conversationType =
+      typeRaw === "INBOX" || typeRaw === "COMMENT" ? typeRaw : undefined;
+
     const result = await getConversations({
       search: searchParams.get("search") ?? undefined,
       pageId: searchParams.get("pageId") ?? undefined,
       platform: searchParams.get("platform") ?? undefined,
-      slaStatus:
-        (searchParams.get("slaStatus") as
-          | "on-time"
-          | "late"
-          | "no-reply") ?? undefined,
+      conversationType,
+      slaStatus,
+      hoursFilter,
       dateFrom: searchParams.get("dateFrom") ?? undefined,
       dateTo: searchParams.get("dateTo") ?? undefined,
       page: Number(searchParams.get("page")) || 1,

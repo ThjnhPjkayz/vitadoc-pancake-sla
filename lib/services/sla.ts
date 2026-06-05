@@ -4,6 +4,7 @@
 
 import { prisma } from "@/lib/prisma";
 import {
+  getSLAConfig,
   getThresholdByType,
   calculateWorkingMinutes,
   isOutsideBusinessHours,
@@ -32,7 +33,8 @@ export async function calculateSLAForConversation(
   conversationId: string,
   pageId: string
 ): Promise<SLAResult> {
-  // Lấy conversation type và timezone của page
+  const config = await getSLAConfig();
+
   const [conversation, page] = await Promise.all([
     prisma.conversation.findUnique({
       where: { id: conversationId },
@@ -46,9 +48,7 @@ export async function calculateSLAForConversation(
 
   const convType = conversation?.type ?? "INBOX";
   const timezone = page?.timezone ?? 7;
-  const threshold = getThresholdByType(convType);
 
-  // Lấy tất cả messages, sắp xếp cũ → mới
   const messages = await prisma.message.findMany({
     where: { conversationId },
     orderBy: { insertedAt: "asc" },
@@ -60,15 +60,15 @@ export async function calculateSLAForConversation(
     },
   });
 
-  // --- Tìm message đầu tiên của khách ---
   const firstCustomerMsg = messages.find((m) => m.isFromCustomer);
 
   if (!firstCustomerMsg?.insertedAt) {
+    const hasAdminMessages = messages.some((m) => m.isFromAdmin);
     return saveAndReturn({
       conversationId,
       pageId,
       convType,
-      threshold,
+      threshold: getThresholdByType(convType, false, config),
       customerMessageId: null,
       customerMessageAt: null,
       adminReplyMessageId: null,
@@ -77,17 +77,18 @@ export async function calculateSLAForConversation(
       effectiveResponseMinutes: null,
       outsideBusinessHours: false,
       isLateReply: false,
-      slaStatus: "pending",
+      slaStatus: hasAdminMessages ? "outbound" : "pending",
     });
   }
 
   const outsideBH = isOutsideBusinessHours(
     firstCustomerMsg.insertedAt,
     timezone,
-    DEFAULT_SLA_CONFIG.businessHours
+    config.businessHours
   );
 
-  // --- Tìm reply đầu tiên của admin sau customer message ---
+  const threshold = getThresholdByType(convType, outsideBH, config);
+
   const firstAdminReply = messages.find(
     (m) =>
       m.isFromAdmin &&
@@ -113,21 +114,18 @@ export async function calculateSLAForConversation(
     });
   }
 
-  // --- Tính thời gian phản hồi ---
   const responseTimeMs =
     firstAdminReply.insertedAt.getTime() -
     firstCustomerMsg.insertedAt.getTime();
   const responseTimeMinutes = Math.round(responseTimeMs / 60_000);
 
-  // Thời gian phản hồi chỉ tính trong giờ làm việc
   const effectiveResponseMinutes = calculateWorkingMinutes(
     firstCustomerMsg.insertedAt,
     firstAdminReply.insertedAt,
     timezone,
-    DEFAULT_SLA_CONFIG.businessHours
+    config.businessHours
   );
 
-  // Đánh giá SLA dựa trên effective time và threshold theo loại conv
   const isLateReply = effectiveResponseMinutes > threshold;
   const slaStatus = isLateReply ? "late" : "on-time";
 
@@ -220,11 +218,12 @@ async function saveAndReturn(params: {
 }
 
 // ----------------------------------------------------------------
-// Recalculate pending SLAs — không cần gọi API, chỉ dùng data trong DB
-// Dùng cho SLA recalc job chạy mỗi 5 phút
+// Recalculate pending SLAs
 // ----------------------------------------------------------------
 
 export async function recalculatePendingSLAs(): Promise<number> {
+  const config = await getSLAConfig();
+
   const pending = await prisma.sLAViolation.findMany({
     where: {
       slaStatus: "pending",
@@ -235,12 +234,12 @@ export async function recalculatePendingSLAs(): Promise<number> {
       customerMessageAt: true,
       slaThresholdMinutes: true,
       pageId: true,
+      conversationType: true,
     },
   });
 
   if (pending.length === 0) return 0;
 
-  // Lấy timezone của các page liên quan
   const pageIds = [...new Set(pending.map((p) => p.pageId))];
   const pages = await prisma.page.findMany({
     where: { id: { in: pageIds } },
@@ -252,7 +251,6 @@ export async function recalculatePendingSLAs(): Promise<number> {
   let updatedCount = 0;
 
   for (const violation of pending) {
-    // Bỏ qua nếu customerMessageAt là placeholder new Date(0)
     if (violation.customerMessageAt.getTime() === 0) continue;
 
     const timezone = timezoneMap.get(violation.pageId) ?? 7;
@@ -260,7 +258,7 @@ export async function recalculatePendingSLAs(): Promise<number> {
       violation.customerMessageAt,
       now,
       timezone,
-      DEFAULT_SLA_CONFIG.businessHours
+      config.businessHours
     );
 
     if (effectiveMinutes > violation.slaThresholdMinutes) {
@@ -270,6 +268,7 @@ export async function recalculatePendingSLAs(): Promise<number> {
           slaStatus: "late",
           isLateReply: true,
           effectiveResponseMinutes: effectiveMinutes,
+          conversationType: violation.conversationType ?? undefined,
         },
       });
       updatedCount++;

@@ -1,7 +1,17 @@
 "use client";
 
-import { Search, X } from "lucide-react";
+import { Search, X, Calendar } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useI18n } from "@/lib/i18n";
 
 interface FilterOption {
   id: string;
@@ -15,6 +25,7 @@ interface FiltersBarProps {
     pageId: string;
     platform: string;
     slaStatus: string;
+    hoursFilter: string;
     dateFrom: string;
     dateTo: string;
   };
@@ -23,13 +34,6 @@ interface FiltersBarProps {
   platforms: string[];
 }
 
-const SLA_STATUS_OPTIONS = [
-  { value: "", label: "All Statuses" },
-  { value: "on-time", label: "✅ On Time" },
-  { value: "late", label: "🔴 Late Reply" },
-  { value: "no-reply", label: "⏳ No Reply" },
-];
-
 const PLATFORM_LABELS: Record<string, string> = {
   tiktok: "TikTok",
   facebook: "Facebook",
@@ -37,15 +41,26 @@ const PLATFORM_LABELS: Record<string, string> = {
   tiktok_business_messaging: "TikTok Business",
 };
 
+const ALL = "_all";
+
+function FilterField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-[11px] font-medium text-muted-foreground px-0.5">{label}</span>
+      {children}
+    </div>
+  );
+}
+
 export default function FiltersBar({
   filters,
   onFilterChange,
   pages,
   platforms,
 }: FiltersBarProps) {
+  const { t, locale } = useI18n();
   const [localSearch, setLocalSearch] = useState(filters.search);
 
-  // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => {
       onFilterChange({ ...filters, search: localSearch });
@@ -62,98 +77,161 @@ export default function FiltersBar({
     filters.pageId ||
     filters.platform ||
     filters.slaStatus ||
+    filters.hoursFilter ||
     filters.dateFrom ||
     filters.dateTo;
 
+  const SLA_STATUS_OPTIONS = [
+    { value: "_all", label: t.filters.allStatuses },
+    { value: "late", label: t.filters.lateReply },
+    { value: "no-reply", label: t.filters.noReply },
+    { value: "on-time", label: t.filters.onTime },
+    { value: "outbound", label: t.filters.outbound },
+  ];
+
   return (
-    <div className="flex flex-wrap items-center gap-3">
+    <div className="flex flex-wrap items-end gap-3">
       {/* Search */}
-      <div className="relative flex-1 min-w-[200px] max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-        <input
-          type="text"
-          placeholder="Search customer..."
-          value={localSearch}
-          onChange={(e) => setLocalSearch(e.target.value)}
-          className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-zinc-300 bg-white text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-        />
-      </div>
+      <FilterField label={t.filters.search}>
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+          <Input
+            type="text"
+            placeholder={t.filters.searchPlaceholder}
+            value={localSearch}
+            onChange={(e) => setLocalSearch(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+      </FilterField>
 
       {/* Page filter */}
-      <select
-        value={filters.pageId}
-        onChange={(e) => update("pageId", e.target.value)}
-        className="px-3 py-2 text-sm rounded-lg border border-zinc-300 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-      >
-        <option value="">All Pages</option>
-        {pages.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name}
-          </option>
-        ))}
-      </select>
+      <FilterField label={t.filters.page}>
+        <Select
+          key={`page-${locale}`}
+          value={filters.pageId || ALL}
+          onValueChange={(v) => update("pageId", !v || v === ALL ? "" : v)}
+        >
+          <SelectTrigger className="min-w-[130px]">
+            <SelectValue placeholder={t.filters.allPages} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t.filters.allPages}</SelectItem>
+            {pages.map((p) => (
+              <SelectItem key={p.id} value={p.id}>
+                {p.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </FilterField>
 
       {/* Platform filter */}
-      <select
-        value={filters.platform}
-        onChange={(e) => update("platform", e.target.value)}
-        className="px-3 py-2 text-sm rounded-lg border border-zinc-300 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-      >
-        <option value="">All Platforms</option>
-        {platforms.map((p) => (
-          <option key={p} value={p}>
-            {PLATFORM_LABELS[p] ?? p}
-          </option>
-        ))}
-      </select>
+      <FilterField label={t.filters.platform}>
+        <Select
+          key={`platform-${locale}`}
+          value={filters.platform || ALL}
+          onValueChange={(v) => update("platform", !v || v === ALL ? "" : v)}
+        >
+          <SelectTrigger className="min-w-[130px]">
+            <SelectValue placeholder={t.filters.allPlatforms} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t.filters.allPlatforms}</SelectItem>
+            {platforms.map((p) => (
+              <SelectItem key={p} value={p}>
+                {PLATFORM_LABELS[p] ?? p}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </FilterField>
 
       {/* SLA Status */}
-      <select
-        value={filters.slaStatus}
-        onChange={(e) => update("slaStatus", e.target.value)}
-        className="px-3 py-2 text-sm rounded-lg border border-zinc-300 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-      >
-        {SLA_STATUS_OPTIONS.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+      <FilterField label={t.filters.slaStatus}>
+        <Select
+          key={`sla-${locale}`}
+          value={filters.slaStatus || ALL}
+          onValueChange={(v) => update("slaStatus", !v || v === ALL ? "" : v)}
+        >
+          <SelectTrigger className="min-w-[150px]">
+            <SelectValue placeholder={t.filters.allStatuses} />
+          </SelectTrigger>
+          <SelectContent>
+            {SLA_STATUS_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </FilterField>
+
+      {/* Hours filter */}
+      <FilterField label={t.filters.hours}>
+        <Select
+          key={`hours-${locale}`}
+          value={filters.hoursFilter || ALL}
+          onValueChange={(v) => update("hoursFilter", !v || v === ALL ? "" : v)}
+        >
+          <SelectTrigger className="min-w-[140px]">
+            <SelectValue placeholder={t.filters.allHours} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t.filters.allHours}</SelectItem>
+            <SelectItem value="in-hours">{t.filters.inHours}</SelectItem>
+            <SelectItem value="after-hours">{t.filters.afterHoursOption}</SelectItem>
+          </SelectContent>
+        </Select>
+      </FilterField>
 
       {/* Date From */}
-      <input
-        type="date"
-        value={filters.dateFrom}
-        onChange={(e) => update("dateFrom", e.target.value)}
-        className="px-3 py-2 text-sm rounded-lg border border-zinc-300 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-      />
+      <FilterField label={t.filters.from}>
+        <div className="relative">
+          <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+          <input
+            type="date"
+            value={filters.dateFrom}
+            onChange={(e) => update("dateFrom", e.target.value)}
+            className="h-8 pl-8 pr-2.5 text-sm rounded-lg border border-input bg-transparent text-foreground transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 [color-scheme:light]"
+          />
+        </div>
+      </FilterField>
 
       {/* Date To */}
-      <input
-        type="date"
-        value={filters.dateTo}
-        onChange={(e) => update("dateTo", e.target.value)}
-        className="px-3 py-2 text-sm rounded-lg border border-zinc-300 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-      />
+      <FilterField label={t.filters.to}>
+        <div className="relative">
+          <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+          <input
+            type="date"
+            value={filters.dateTo}
+            onChange={(e) => update("dateTo", e.target.value)}
+            className="h-8 pl-8 pr-2.5 text-sm rounded-lg border border-input bg-transparent text-foreground transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 [color-scheme:light]"
+          />
+        </div>
+      </FilterField>
 
       {/* Clear all */}
       {hasActiveFilters && (
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() =>
             onFilterChange({
               search: "",
               pageId: "",
               platform: "",
               slaStatus: "",
+              hoursFilter: "",
               dateFrom: "",
               dateTo: "",
             })
           }
-          className="flex items-center gap-1 px-3 py-2 text-sm rounded-lg text-red-600 hover:bg-red-50 transition-colors"
+          className="text-destructive hover:text-destructive hover:bg-destructive/10 mb-0.5"
         >
-          <X className="w-4 h-4" />
-          Clear
-        </button>
+          <X className="w-3.5 h-3.5" />
+          {t.filters.clear}
+        </Button>
       )}
     </div>
   );

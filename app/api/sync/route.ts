@@ -1,6 +1,7 @@
 // ============================================================
-// POST /api/sync — Trigger sync from Pancake
-// GET  /api/sync?history=true — Lấy lịch sử sync
+// POST   /api/sync — Trigger manual sync từ Pancake
+// DELETE /api/sync — Cancel sync đang chạy
+// GET    /api/sync?history=true — Lấy lịch sử sync
 // ============================================================
 
 import { syncAllPages } from "@/lib/services/sync";
@@ -8,21 +9,53 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-export async function POST() {
+export async function POST(request: Request) {
+  // Kiểm tra có sync nào đang chạy không (bỏ qua nếu stale > 30 phút)
+  const STALE_THRESHOLD_MS = 30 * 60 * 1000;
+  const running = await prisma.syncHistory.findFirst({
+    where: { status: "running" },
+    select: { id: true, startedAt: true },
+  });
+
+  if (running) {
+    const isStale = Date.now() - running.startedAt.getTime() > STALE_THRESHOLD_MS;
+    if (isStale) {
+      await prisma.syncHistory.update({
+        where: { id: running.id },
+        data: { status: "failed", completedAt: new Date() },
+      });
+    } else {
+      return Response.json({ success: false, error: "Sync đang chạy" }, { status: 409 });
+    }
+  }
+
+  const force = new URL(request.url).searchParams.get("force") === "true";
+
+  // Fire-and-forget — không await, trả về ngay
+  syncAllPages(force).catch((err) =>
+    console.error("[Sync] Background sync failed:", err)
+  );
+
+  return Response.json({ success: true, started: true });
+}
+
+export async function DELETE() {
   try {
-    // Lấy thời gian sync gần nhất để chỉ sync dữ liệu mới
-    const lastSync = await prisma.syncHistory.findFirst({
-      where: { status: "success" },
-      orderBy: { startedAt: "desc" },
-      select: { startedAt: true },
+    const running = await prisma.syncHistory.findFirst({
+      where: { status: "running" },
+      select: { id: true },
     });
 
-    // Dùng startedAt trừ 2 phút buffer để không bỏ sót conv được update trong lúc sync đang chạy
-    const since = lastSync?.startedAt
-      ? new Date(lastSync.startedAt.getTime() - 2 * 60 * 1000)
-      : undefined;
-    const stats = await syncAllPages(since);
-    return Response.json({ success: true, stats, since: since?.toISOString() ?? null }, { status: 200 });
+    if (!running) {
+      return Response.json({ success: false, error: "Không có sync nào đang chạy" }, { status: 404 });
+    }
+
+    await prisma.syncHistory.update({
+      where: { id: running.id },
+      data: { status: "cancelled" },
+    });
+
+    return Response.json({ success: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return Response.json({ success: false, error: message }, { status: 500 });
@@ -51,7 +84,6 @@ export async function GET(request: Request) {
         },
       });
 
-      // Lấy sync gần nhất thành công
       const lastSuccess = await prisma.syncHistory.findFirst({
         where: { status: "success" },
         orderBy: { completedAt: "desc" },

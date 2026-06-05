@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  output   = "../app/generated/prisma"
 }
 
 datasource db {
@@ -194,4 +195,17 @@ model SyncHistory {
 
   @@index([status])
   @@index([startedAt])
+}
+
+// ============================================================
+// User — Tài khoản đăng nhập
+// ============================================================
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

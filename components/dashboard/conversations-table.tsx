@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -10,6 +10,7 @@ import {
   type SortingState,
   type Updater,
 } from "@tanstack/react-table";
+import { Moon, Sun } from "lucide-react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -17,6 +18,17 @@ import {
   ChevronsRight,
   ArrowUpDown,
 } from "lucide-react";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useI18n } from "@/lib/i18n";
 
 interface ConversationRow {
   id: string;
@@ -29,8 +41,11 @@ interface ConversationRow {
   responseTimeMinutes: number | null;
   isLateReply: boolean;
   hasReply: boolean;
+  isOutbound: boolean;
   customerMessageAt: string | null;
+  adminReplyAt: string | null;
   conversationType: string;
+  outsideBusinessHours: boolean;
 }
 
 interface ConversationsTableProps {
@@ -52,6 +67,78 @@ const PLATFORM_LABELS: Record<string, string> = {
   tiktok_business_messaging: "TT Biz",
 };
 
+function HoursBadge({ outside, labels }: { outside: boolean; labels: { afterHours: string; workingHours: string } }) {
+  if (outside) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] text-indigo-500 font-medium">
+        <Moon className="w-3 h-3" />
+        {labels.afterHours}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-[11px] text-amber-500 font-medium">
+      <Sun className="w-3 h-3" />
+      {labels.workingHours}
+    </span>
+  );
+}
+
+function SLABadge({ row, labels }: { row: ConversationRow; labels: { outbound: string; noReply: string; late: string; onTime: string; afterHours: string; workingHours: string } }) {
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => { setNow(Date.now()); }, []);
+
+  const hoursLabels = { afterHours: labels.afterHours, workingHours: labels.workingHours };
+
+  if (row.isOutbound) {
+    return (
+      <div className="flex flex-col gap-1">
+        <Badge className="bg-violet-50 text-violet-600 border-violet-200 hover:bg-violet-50">
+          {labels.outbound}
+        </Badge>
+      </div>
+    );
+  }
+  if (!row.hasReply) {
+    const waitMs = row.customerMessageAt && now !== null
+      ? now - new Date(row.customerMessageAt).getTime()
+      : null;
+    const waitHours = waitMs !== null ? Math.floor(waitMs / 3_600_000) : null;
+    const waitLabel =
+      waitHours === null ? "" : waitHours < 1 ? " · <1h" : waitHours < 24 ? ` · ${waitHours}h` : ` · ${Math.floor(waitHours / 24)}d`;
+    return (
+      <div className="flex flex-col gap-1">
+        <Badge className="bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-50 whitespace-nowrap">
+          {labels.noReply}{waitLabel}
+        </Badge>
+        <HoursBadge outside={row.outsideBusinessHours} labels={hoursLabels} />
+      </div>
+    );
+  }
+  if (row.isLateReply) {
+    return (
+      <div className="flex flex-col gap-1">
+        <Badge variant="destructive">{labels.late}</Badge>
+        <HoursBadge outside={row.outsideBusinessHours} labels={hoursLabels} />
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-1">
+      <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50">
+        {labels.onTime}
+      </Badge>
+      <HoursBadge outside={row.outsideBusinessHours} labels={hoursLabels} />
+    </div>
+  );
+}
+
+function formatDate(iso: string) {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export default function ConversationsTable({
   data,
   total,
@@ -63,21 +150,46 @@ export default function ConversationsTable({
   onSortChange,
   loading,
 }: ConversationsTableProps) {
+  const { t } = useI18n();
   const [sorting, setSorting] = useState<SortingState>([]);
+
+  const slaLabels = {
+    outbound: t.table.status.outbound,
+    noReply: t.table.status.noReply,
+    late: t.table.status.late,
+    onTime: t.table.status.onTime,
+    afterHours: t.table.hours.afterHours,
+    workingHours: t.table.hours.workingHours,
+  };
 
   const columns = useMemo<ColumnDef<ConversationRow>[]>(
     () => [
       {
+        id: "pageName",
+        header: t.table.col.page,
+        accessorKey: "pageName",
+        cell: ({ row }) => (
+          <div className="min-w-[120px]">
+            <div className="text-sm max-w-[160px] truncate font-medium">
+              {row.original.pageName}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {PLATFORM_LABELS[row.original.platform] ?? row.original.platform}
+            </div>
+          </div>
+        ),
+      },
+      {
         id: "customerName",
-        header: "Customer",
+        header: t.table.col.customer,
         accessorKey: "customerName",
         cell: ({ row }) => (
           <div className="min-w-[140px]">
-            <div className="font-medium text-zinc-900">
+            <div className="font-medium text-sm">
               {row.original.customerName ?? "Unknown"}
             </div>
             {row.original.customerUsername && (
-              <div className="text-xs text-zinc-500">
+              <div className="text-xs text-muted-foreground">
                 @{row.original.customerUsername}
               </div>
             )}
@@ -85,65 +197,31 @@ export default function ConversationsTable({
         ),
       },
       {
-        id: "pageName",
-        header: "Page",
-        accessorKey: "pageName",
-        cell: ({ row }) => (
-          <div className="min-w-[120px]">
-            <div className="text-sm text-zinc-900 max-w-[160px] truncate">
-              {row.original.pageName}
-            </div>
-            <div className="text-xs text-zinc-500">
-              {PLATFORM_LABELS[row.original.platform] ?? row.original.platform}
-            </div>
-          </div>
-        ),
-      },
-      {
         id: "conversationType",
-        header: "Type",
+        header: t.table.col.type,
         accessorKey: "conversationType",
         cell: ({ row }) => (
-          <span
-            className={`inline-flex px-2 py-0.5 text-xs rounded-full ${
+          <Badge
+            variant="outline"
+            className={
               row.original.conversationType === "INBOX"
-                ? "bg-blue-50 text-blue-700"
-                : "bg-purple-50 text-purple-700"
-            }`}
+                ? "border-blue-200 text-blue-700 bg-blue-50"
+                : "border-purple-200 text-purple-700 bg-purple-50"
+            }
           >
             {row.original.conversationType}
-          </span>
-        ),
-      },
-      {
-        id: "lastMessage",
-        header: "Last Message",
-        accessorKey: "lastMessage",
-        cell: ({ row }) => (
-          <div className="max-w-[220px] truncate text-sm text-zinc-500">
-            {row.original.lastMessage ?? "—"}
-          </div>
+          </Badge>
         ),
       },
       {
         id: "responseTime",
-        header: "Response Time",
+        header: t.table.col.responseTime,
         accessorKey: "responseTimeMinutes",
         cell: ({ row }) => {
           const mins = row.original.responseTimeMinutes;
-          if (mins === null) {
-            return (
-              <span className="text-sm text-zinc-400">No reply</span>
-            );
-          }
+          if (mins === null) return <span className="text-sm text-muted-foreground/50">—</span>;
           return (
-            <span
-              className={`text-sm font-mono ${
-                row.original.isLateReply
-                  ? "text-red-600"
-                  : "text-emerald-600"
-              }`}
-            >
+            <span className={`text-sm font-mono font-medium ${row.original.isLateReply ? "text-red-600" : "text-emerald-600"}`}>
               {mins}m
             </span>
           );
@@ -151,49 +229,38 @@ export default function ConversationsTable({
       },
       {
         id: "slaStatus",
-        header: "SLA",
+        header: t.table.col.sla,
         accessorKey: "isLateReply",
+        cell: ({ row }) => <SLABadge row={row.original} labels={slaLabels} />,
+      },
+      {
+        id: "customerMessageAt",
+        header: t.table.col.customerMsg,
+        accessorKey: "customerMessageAt",
         cell: ({ row }) => {
-          if (!row.original.hasReply) {
-            return (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-zinc-100 text-zinc-500">
-                ⏳ Pending
-              </span>
-            );
-          }
-          return row.original.isLateReply ? (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-red-50 text-red-700">
-              🔴 Late
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-emerald-50 text-emerald-700">
-              ✅ On Time
+          const date = row.original.customerMessageAt;
+          return (
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
+              {date ? formatDate(date) : "—"}
             </span>
           );
         },
       },
       {
-        id: "customerMessageAt",
-        header: "Time",
-        accessorKey: "customerMessageAt",
+        id: "adminReplyAt",
+        header: t.table.col.csReply,
+        accessorKey: "adminReplyAt",
         cell: ({ row }) => {
-          const date = row.original.customerMessageAt;
+          const date = row.original.adminReplyAt;
           return (
-            <span className="text-xs text-zinc-400 whitespace-nowrap">
-              {date
-                ? new Date(date).toLocaleString("vi-VN", {
-                    month: "short",
-                    day: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })
-                : "—"}
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
+              {date ? formatDate(date) : <span className="text-muted-foreground/30">—</span>}
             </span>
           );
         },
       },
     ],
-    []
+    [t]
   );
 
   const table = useReactTable({
@@ -217,129 +284,90 @@ export default function ConversationsTable({
   const end = Math.min(page * pageSize, total);
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white overflow-hidden shadow-sm">
-      {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <tr
-                key={headerGroup.id}
-                className="border-b border-zinc-200"
-              >
-                {headerGroup.headers.map((header) => (
-                  <th
-                    key={header.id}
-                    className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wider cursor-pointer select-none hover:text-zinc-700 transition-colors"
-                    onClick={header.column.getToggleSortingHandler()}
-                  >
-                    <div className="flex items-center gap-1">
-                      {flexRender(
-                        header.column.columnDef.header,
-                        header.getContext()
-                      )}
-                      <ArrowUpDown className="w-3 h-3 opacity-50" />
-                    </div>
-                  </th>
+    <div className="rounded-xl border bg-card overflow-hidden shadow-sm">
+      <Table>
+        <TableHeader>
+          {table.getHeaderGroups().map((headerGroup) => (
+            <TableRow key={headerGroup.id} className="bg-muted/40 hover:bg-muted/40">
+              {headerGroup.headers.map((header) => (
+                <TableHead
+                  key={header.id}
+                  className="text-xs font-semibold uppercase tracking-wider cursor-pointer select-none"
+                  onClick={header.column.getToggleSortingHandler()}
+                >
+                  <div className="flex items-center gap-1">
+                    {flexRender(header.column.columnDef.header, header.getContext())}
+                    <ArrowUpDown className="w-3 h-3 opacity-40" />
+                  </div>
+                </TableHead>
+              ))}
+            </TableRow>
+          ))}
+        </TableHeader>
+        <TableBody>
+          {loading ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <TableRow key={i}>
+                {columns.map((_, j) => (
+                  <TableCell key={j}>
+                    <div className="h-4 bg-muted rounded animate-pulse" />
+                  </TableCell>
                 ))}
-              </tr>
-            ))}
-          </thead>
-          <tbody>
-            {loading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <tr
-                  key={i}
-                    className="border-b border-zinc-100"
-                >
-                  {columns.map((_, j) => (
-                    <td key={j} className="px-4 py-3">
-                      <div className="h-4 bg-zinc-100 rounded animate-pulse" />
-                    </td>
-                  ))}
-                </tr>
-              ))
-            ) : data.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={columns.length}
-                  className="px-4 py-12 text-center text-zinc-400"
-                >
-                  No conversations found
-                </td>
-              </tr>
-            ) : (
-              table.getRowModel().rows.map((row) => (
-                <tr
-                  key={row.id}
-                  className="border-b border-zinc-100 hover:bg-zinc-50 transition-colors"
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-3">
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </td>
-                  ))}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              </TableRow>
+            ))
+          ) : data.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={columns.length} className="py-12 text-center text-muted-foreground">
+                {t.table.noConversations}
+              </TableCell>
+            </TableRow>
+          ) : (
+            table.getRowModel().rows.map((row) => (
+              <TableRow key={row.id}>
+                {row.getVisibleCells().map((cell) => (
+                  <TableCell key={cell.id}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-200 bg-zinc-50">
-        <div className="flex items-center gap-3 text-sm text-zinc-500">
+      <div className="flex items-center justify-between px-4 py-3 border-t bg-muted/20">
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
           <span>
-            {total > 0 ? `${start}-${end} of ${total}` : "No results"}
+            {total > 0 ? `${start}–${end} ${t.table.of} ${total}` : t.common.noResults}
           </span>
           <select
             value={pageSize}
             onChange={(e) => onPageSizeChange(Number(e.target.value))}
-            className="px-2 py-1 text-xs rounded border border-zinc-300 bg-white text-zinc-900"
+            className="h-7 px-2 text-xs rounded border border-input bg-background text-foreground"
           >
             {[10, 20, 50, 100].map((s) => (
-              <option key={s} value={s}>
-                {s}/page
-              </option>
+              <option key={s} value={s}>{s}{t.table.perPage}</option>
             ))}
           </select>
         </div>
 
         <div className="flex items-center gap-1">
-          <button
-            onClick={() => onPageChange(1)}
-            disabled={page <= 1}
-            className="p-1.5 rounded hover:bg-zinc-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-          >
-            <ChevronsLeft className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => onPageChange(page - 1)}
-            disabled={page <= 1}
-            className="p-1.5 rounded hover:bg-zinc-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <span className="px-3 text-sm text-zinc-500">
+          <Button variant="outline" size="icon-sm" onClick={() => onPageChange(1)} disabled={page <= 1}>
+            <ChevronsLeft className="w-3.5 h-3.5" />
+          </Button>
+          <Button variant="outline" size="icon-sm" onClick={() => onPageChange(page - 1)} disabled={page <= 1}>
+            <ChevronLeft className="w-3.5 h-3.5" />
+          </Button>
+          <span className="px-3 text-sm text-muted-foreground min-w-[60px] text-center">
             {page} / {totalPages || 1}
           </span>
-          <button
-            onClick={() => onPageChange(page + 1)}
-            disabled={page >= totalPages}
-            className="p-1.5 rounded hover:bg-zinc-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => onPageChange(totalPages)}
-            disabled={page >= totalPages}
-            className="p-1.5 rounded hover:bg-zinc-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-          >
-            <ChevronsRight className="w-4 h-4" />
-          </button>
+          <Button variant="outline" size="icon-sm" onClick={() => onPageChange(page + 1)} disabled={page >= totalPages}>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </Button>
+          <Button variant="outline" size="icon-sm" onClick={() => onPageChange(totalPages)} disabled={page >= totalPages}>
+            <ChevronsRight className="w-3.5 h-3.5" />
+          </Button>
         </div>
       </div>
     </div>

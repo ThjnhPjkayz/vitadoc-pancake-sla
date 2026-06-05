@@ -5,6 +5,22 @@
 import { prisma } from "@/lib/prisma";
 
 // ----------------------------------------------------------------
+// Backfill conversationType from Conversation.type for null records
+// ----------------------------------------------------------------
+
+export async function backfillConversationType(): Promise<number> {
+  const result = await prisma.$executeRaw`
+    UPDATE "SLAViolation" s
+    SET "conversationType" = c.type
+    FROM "Conversation" c
+    WHERE s."conversationId" = c.id
+      AND s."conversationType" IS NULL
+  `;
+  return result;
+}
+import { Prisma } from "@/app/generated/prisma";
+
+// ----------------------------------------------------------------
 // Types
 // ----------------------------------------------------------------
 
@@ -16,15 +32,21 @@ export interface DashboardStats {
   avgResponseTimeMinutes: number;
   slaSuccessRate: number;
   lateReplyCount: number;
+  inHoursViolations: number;
+  afterHoursViolations: number;
   onTimeCount: number;
-  pagesAtLimit: number; // Số page có đúng 60 conversations (có thể thiếu dữ liệu)
+  pendingCount: number;
+  pendingBreachedCount: number;
+  pagesAtLimit: number;
 }
 
 export interface ConversationFilter {
   search?: string;
   pageId?: string;
   platform?: string;
-  slaStatus?: "on-time" | "late" | "no-reply";
+  conversationType?: "INBOX" | "COMMENT";
+  slaStatus?: "on-time" | "late" | "no-reply" | "needs-attention" | "outbound";
+  hoursFilter?: "in-hours" | "after-hours";
   dateFrom?: string;
   dateTo?: string;
   page?: number;
@@ -44,8 +66,11 @@ export interface ConversationRow {
   responseTimeMinutes: number | null;
   isLateReply: boolean;
   hasReply: boolean;
+  isOutbound: boolean;
   customerMessageAt: string | null;
+  adminReplyAt: string | null;
   conversationType: string;
+  outsideBusinessHours: boolean;
 }
 
 export interface PaginatedResult<T> {
@@ -69,6 +94,18 @@ export interface PageFilter {
   platform: string;
 }
 
+export interface PageSummary {
+  pageId: string;
+  pageName: string;
+  platform: string;
+  total: number;
+  lateCount: number;
+  pendingCount: number;
+  onTimeCount: number;
+  avgResponseTimeMinutes: number;
+  lateRate: number; // 0–1
+}
+
 // ----------------------------------------------------------------
 // Get Dashboard Stats
 // ----------------------------------------------------------------
@@ -84,6 +121,10 @@ export async function getDashboardStats(
     totalMessages,
     slaAgg,
     slaGrouped,
+    pendingCount,
+    inHoursViolations,
+    afterHoursViolations,
+    pendingBreachedCount,
   ] = await Promise.all([
     prisma.page.count({ where: { isActivated: true } }),
     prisma.conversation.count(),
@@ -98,32 +139,107 @@ export async function getDashboardStats(
       where: { responseTimeMinutes: { not: null }, ...wherePage },
       _count: { id: true },
     }),
+    prisma.sLAViolation.count({
+      where: { responseTimeMinutes: null, slaStatus: { not: "outbound" }, ...wherePage },
+    }),
+    prisma.sLAViolation.count({
+      where: { isLateReply: true, outsideBusinessHours: false, ...wherePage },
+    }),
+    prisma.sLAViolation.count({
+      where: { isLateReply: true, outsideBusinessHours: true, ...wherePage },
+    }),
+    prisma.sLAViolation.count({
+      where: {
+        responseTimeMinutes: null,
+        slaStatus: { not: "outbound" },
+        ...wherePage,
+        OR: [
+          {
+            conversationType: "INBOX",
+            customerMessageAt: { lt: new Date(Date.now() - 15 * 60 * 1000) },
+          },
+          {
+            conversationType: "COMMENT",
+            customerMessageAt: { lt: new Date(Date.now() - 60 * 60 * 1000) },
+          },
+        ],
+      },
+    }),
   ]);
 
-  // Đếm số page có đúng 60 conversations (có thể đang bị giới hạn API)
   const pagesAtLimit = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
     `SELECT COUNT(*) as count FROM (SELECT "pageId", COUNT(*) as cnt FROM "Conversation" GROUP BY "pageId" HAVING COUNT(*) = 60) sub`
   ).then((r) => Number(r[0].count));
 
   const totalSLA = slaAgg._count.id;
-  const lateReply =
-    slaGrouped.find((g) => g.isLateReply)?._count.id ?? 0;
-  const onTime =
-    slaGrouped.find((g) => !g.isLateReply)?._count.id ?? 0;
+  const lateReply = slaGrouped.find((g) => g.isLateReply)?._count.id ?? 0;
+  const onTime = slaGrouped.find((g) => !g.isLateReply)?._count.id ?? 0;
 
   return {
     totalPages,
     totalConversations,
     totalMessages,
     totalSLAViolations: totalSLA,
-    avgResponseTimeMinutes: Math.round(
-      slaAgg._avg.responseTimeMinutes ?? 0
-    ),
+    avgResponseTimeMinutes: Math.round(slaAgg._avg.responseTimeMinutes ?? 0),
     slaSuccessRate: totalSLA > 0 ? onTime / totalSLA : 0,
     lateReplyCount: lateReply,
+    inHoursViolations,
+    afterHoursViolations,
     onTimeCount: onTime,
+    pendingCount,
+    pendingBreachedCount,
     pagesAtLimit,
   };
+}
+
+// ----------------------------------------------------------------
+// Get Page Summaries (leaderboard)
+// ----------------------------------------------------------------
+
+export async function getPageSummaries(): Promise<PageSummary[]> {
+  const rows = await prisma.$queryRaw<
+    Array<{
+      pageId: string;
+      pageName: string;
+      platform: string;
+      total: bigint;
+      lateCount: bigint;
+      pendingCount: bigint;
+      avgResponseTimeMinutes: number | null;
+    }>
+  >(Prisma.sql`
+    SELECT
+      p.id                                                           AS "pageId",
+      p.name                                                         AS "pageName",
+      p.platform,
+      COUNT(CASE WHEN s."slaStatus" != 'outbound' THEN 1 END)                              AS total,
+      SUM(CASE WHEN s."isLateReply" = true THEN 1 ELSE 0 END)                             AS "lateCount",
+      COUNT(CASE WHEN s."responseTimeMinutes" IS NULL AND s."slaStatus" != 'outbound' THEN 1 END) AS "pendingCount",
+      ROUND(AVG(CASE WHEN s."responseTimeMinutes" IS NOT NULL THEN s."responseTimeMinutes" END))  AS "avgResponseTimeMinutes"
+    FROM "Page" p
+    LEFT JOIN "SLAViolation" s ON s."pageId" = p.id
+    WHERE p."isActivated" = true
+    GROUP BY p.id, p.name, p.platform
+    ORDER BY "lateCount" DESC
+  `);
+
+  return rows.map((r) => {
+    const total = Number(r.total);
+    const lateCount = Number(r.lateCount);
+    const pendingCount = Number(r.pendingCount);
+    const onTimeCount = total - lateCount - pendingCount;
+    return {
+      pageId: r.pageId,
+      pageName: r.pageName,
+      platform: r.platform,
+      total,
+      lateCount,
+      pendingCount,
+      onTimeCount: Math.max(0, onTimeCount),
+      avgResponseTimeMinutes: r.avgResponseTimeMinutes ? Math.round(r.avgResponseTimeMinutes) : 0,
+      lateRate: total > 0 ? lateCount / total : 0,
+    };
+  });
 }
 
 // ----------------------------------------------------------------
@@ -137,7 +253,9 @@ export async function getConversations(
     search,
     pageId,
     platform,
+    conversationType,
     slaStatus,
+    hoursFilter,
     dateFrom,
     dateTo,
     page = 1,
@@ -146,8 +264,9 @@ export async function getConversations(
     sortOrder = "desc",
   } = filter;
 
-  // Build SLA where conditions
   const slaWhere: Record<string, unknown> = {};
+
+  if (conversationType) slaWhere.conversationType = conversationType;
 
   if (slaStatus === "on-time") {
     slaWhere.isLateReply = false;
@@ -156,25 +275,36 @@ export async function getConversations(
     slaWhere.isLateReply = true;
   } else if (slaStatus === "no-reply") {
     slaWhere.responseTimeMinutes = null;
+    slaWhere.slaStatus = { not: "outbound" };
+  } else if (slaStatus === "needs-attention") {
+    slaWhere.OR = [
+      { isLateReply: true },
+      { responseTimeMinutes: null, slaStatus: { not: "outbound" } },
+    ];
+  } else if (slaStatus === "outbound") {
+    slaWhere.slaStatus = "outbound";
+  }
+
+  if (hoursFilter === "in-hours") {
+    slaWhere.outsideBusinessHours = false;
+  } else if (hoursFilter === "after-hours") {
+    slaWhere.outsideBusinessHours = true;
   }
 
   if (dateFrom || dateTo) {
     slaWhere.customerMessageAt = {
       ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
-      ...(dateTo ? { lte: new Date(dateTo) } : {}),
+      ...(dateTo ? { lte: new Date(new Date(dateTo).getTime() + 86_400_000 - 1) } : {}),
     };
   }
 
-  // Build page where
   const pageWhere: Record<string, unknown> = {};
   if (platform) pageWhere.platform = platform;
-  if (search) {
-    pageWhere.name = { contains: search, mode: "insensitive" };
-  }
+  if (search) pageWhere.name = { contains: search, mode: "insensitive" };
 
-  // Main query
   const where: Record<string, unknown> = {};
   if (pageId) where.pageId = pageId;
+  if (Object.keys(pageWhere).length > 0) where.page = pageWhere;
 
   const [data, total] = await Promise.all([
     prisma.sLAViolation.findMany({
@@ -193,13 +323,10 @@ export async function getConversations(
           select: { name: true, platform: true, id: true },
         },
       },
-      orderBy: {
-        [sortBy === "customerName"
-          ? "conversation"
-          : sortBy === "responseTimeMinutes"
-          ? "responseTimeMinutes"
-          : "customerMessageAt"]: sortOrder,
-      },
+      orderBy:
+        sortBy === "customerName"
+          ? { conversation: { customerName: sortOrder } }
+          : { [sortBy]: sortOrder },
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
@@ -218,14 +345,63 @@ export async function getConversations(
       responseTimeMinutes: row.responseTimeMinutes,
       isLateReply: row.isLateReply,
       hasReply: row.responseTimeMinutes !== null,
+      isOutbound: row.slaStatus === "outbound",
       customerMessageAt: row.customerMessageAt?.toISOString() ?? null,
+      adminReplyAt: row.adminReplyAt?.toISOString() ?? null,
       conversationType: row.conversation.type,
+      outsideBusinessHours: row.outsideBusinessHours,
     })),
     total,
     page,
     pageSize,
     totalPages: Math.ceil(total / pageSize),
   };
+}
+
+// ----------------------------------------------------------------
+// Get stats by conversation type (Inbox / Comment)
+// ----------------------------------------------------------------
+
+export interface ConversationTypeStats {
+  lateWorkingHours: number;
+  totalWorkingHours: number;
+  lateAfterHours: number;
+  totalAfterHours: number;
+  pending: number;
+  total: number;
+}
+
+export async function getConversationTypeStats(
+  conversationType: "INBOX" | "COMMENT",
+  pageId?: string
+): Promise<ConversationTypeStats> {
+  const where = {
+    conversationType,
+    ...(pageId ? { pageId } : {}),
+  };
+
+  const [lateWorkingHours, totalWorkingHours, lateAfterHours, totalAfterHours, pending, total] = await Promise.all([
+    prisma.sLAViolation.count({
+      where: { ...where, isLateReply: true, outsideBusinessHours: false },
+    }),
+    prisma.sLAViolation.count({
+      where: { ...where, outsideBusinessHours: false, slaStatus: { not: "outbound" } },
+    }),
+    prisma.sLAViolation.count({
+      where: { ...where, isLateReply: true, outsideBusinessHours: true },
+    }),
+    prisma.sLAViolation.count({
+      where: { ...where, outsideBusinessHours: true, slaStatus: { not: "outbound" } },
+    }),
+    prisma.sLAViolation.count({
+      where: { ...where, responseTimeMinutes: null, slaStatus: { not: "outbound" } },
+    }),
+    prisma.sLAViolation.count({
+      where: { ...where, slaStatus: { not: "outbound" } },
+    }),
+  ]);
+
+  return { lateWorkingHours, totalWorkingHours, lateAfterHours, totalAfterHours, pending, total };
 }
 
 // ----------------------------------------------------------------
@@ -264,16 +440,12 @@ export async function getSLAChartData(
 ): Promise<SLAChartData[]> {
   const wherePage = pageId ? { pageId } : {};
 
-  // Lấy dữ liệu 30 ngày gần nhất
   const days = 30;
   const since = new Date();
   since.setDate(since.getDate() - days);
 
   const violations = await prisma.sLAViolation.findMany({
-    where: {
-      ...wherePage,
-      customerMessageAt: { gte: since },
-    },
+    where: { ...wherePage, customerMessageAt: { gte: since } },
     select: {
       customerMessageAt: true,
       isLateReply: true,
@@ -282,13 +454,11 @@ export async function getSLAChartData(
     orderBy: { customerMessageAt: "asc" },
   });
 
-  // Group by date
   const grouped: Record<
     string,
     { total: number; violations: number; totalTime: number }
   > = {};
 
-  // Init all dates
   for (let i = 0; i < days; i++) {
     const d = new Date();
     d.setDate(d.getDate() - i);
@@ -311,6 +481,59 @@ export async function getSLAChartData(
       date,
       total: val.total,
       violations: val.violations,
-      avgResponseTime: val.total > 0 ? Math.round(val.totalTime / val.total) : 0,
+      avgResponseTime:
+        val.total > 0 ? Math.round(val.totalTime / val.total) : 0,
     }));
+}
+
+// ----------------------------------------------------------------
+// Get SLA Violations Trend (last 7 days, split by conversationType)
+// ----------------------------------------------------------------
+
+export interface ViolationsTrendDay {
+  date: string; // "DD/MM"
+  inbox: number;
+  comment: number;
+}
+
+export async function getViolationsTrend(
+  pageId?: string
+): Promise<ViolationsTrendDay[]> {
+  const wherePage = pageId ? { pageId } : {};
+
+  const since = new Date();
+  since.setDate(since.getDate() - 29);
+  since.setHours(0, 0, 0, 0);
+
+  const violations = await prisma.sLAViolation.findMany({
+    where: {
+      ...wherePage,
+      isLateReply: true,
+      customerMessageAt: { gte: since },
+    },
+    select: { customerMessageAt: true, conversationType: true },
+  });
+
+  const grouped: Record<string, { inbox: number; comment: number }> = {};
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    grouped[key] = { inbox: 0, comment: 0 };
+  }
+
+  for (const v of violations) {
+    if (!v.customerMessageAt) continue;
+    const key = v.customerMessageAt.toISOString().slice(0, 10);
+    if (!grouped[key]) continue;
+    if (v.conversationType === "INBOX") grouped[key].inbox++;
+    else if (v.conversationType === "COMMENT") grouped[key].comment++;
+  }
+
+  return Object.entries(grouped)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, val]) => {
+      const [, mm, dd] = date.split("-");
+      return { date: `${dd}/${mm}`, inbox: val.inbox, comment: val.comment };
+    });
 }

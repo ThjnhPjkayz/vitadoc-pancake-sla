@@ -1,9 +1,11 @@
 // ============================================================
 // Sync Service
 // Orchestrates data flow: Pancake API → PostgreSQL via Prisma
+// Full sync — chạy 1 lần/ngày lúc 23:59
 // ============================================================
 
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@/app/generated/prisma";
 import {
   getPages,
   generatePageAccessToken,
@@ -16,6 +18,12 @@ import type {
   PancakeConversation,
   PancakeMessage,
 } from "@/lib/types/pancake";
+
+// Pancake trả inserted_at/updated_at dạng "2024-01-15T10:30:00" không có timezone
+// → phải gắn "+07:00" để parse đúng UTC+7
+function parsePancakeDate(str: string): Date {
+  return new Date(str + "+07:00");
+}
 
 // ----------------------------------------------------------------
 // Types
@@ -33,7 +41,7 @@ export interface SyncStats {
 // Main Sync
 // ----------------------------------------------------------------
 
-export async function syncAllPages(since?: Date): Promise<SyncStats> {
+export async function syncAllPages(force = false): Promise<SyncStats> {
   const stats: SyncStats = {
     pages: { upserted: 0, skipped: 0 },
     conversations: { upserted: 0, skipped: 0 },
@@ -56,10 +64,28 @@ export async function syncAllPages(since?: Date): Promise<SyncStats> {
     console.warn("[Sync] Could not create SyncHistory record:", err);
   }
 
-  if (since) {
-    console.log(`[Sync] 🚀 Starting incremental sync (since ${since.toISOString()})...`);
+  console.log("[Sync] 🚀 Starting full sync...");
+
+  // --- Lấy thời gian sync thành công gần nhất để incremental sync ---
+  let since: Date | undefined;
+  if (!force) {
+    const lastSuccess = await prisma.syncHistory.findFirst({
+      where: { status: "success" },
+      orderBy: { completedAt: "desc" },
+      select: { completedAt: true },
+    });
+    if (lastSuccess?.completedAt) {
+      // Trừ 5 phút buffer để tránh miss conversations ở edge case timezone/timing
+      since = new Date(lastSuccess.completedAt.getTime() - 5 * 60 * 1000);
+    }
+  }
+
+  if (force) {
+    console.log("[Sync] Force full sync — bỏ qua incremental");
+  } else if (since) {
+    console.log(`[Sync] Incremental sync từ ${since.toISOString()}`);
   } else {
-    console.log("[Sync] 🚀 Starting full sync...");
+    console.log("[Sync] Full sync (không có lịch sử thành công trước đó)");
   }
 
   // --- STEP 1: Fetch pages from Pancake ---
@@ -74,29 +100,41 @@ export async function syncAllPages(since?: Date): Promise<SyncStats> {
   }
 
   // --- STEP 2: Loop từng page ---
+  let cancelled = false;
   for (const page of pages) {
+    // Kiểm tra cancel trước mỗi page
+    if (syncRecord) {
+      const current = await prisma.syncHistory.findUnique({
+        where: { id: syncRecord.id },
+        select: { status: true },
+      });
+      if (current?.status === "cancelled") {
+        console.log("[Sync] ⛔ Cancelled by user");
+        cancelled = true;
+        break;
+      }
+    }
+
     try {
       await syncSinglePage(page, stats, since);
     } catch (err) {
-      stats.errors.push(
-        `Page ${page.id} (${page.name}): ${String(err)}`
-      );
+      stats.errors.push(`Page ${page.id} (${page.name}): ${String(err)}`);
     }
 
     // Rate limit safety: chờ 500ms giữa các page
     await new Promise((r) => setTimeout(r, 500));
   }
 
-  console.log("[Sync] ✅ Done!", stats);
+  console.log(cancelled ? "[Sync] ⛔ Stopped." : "[Sync] ✅ Done!", stats);
 
   // --- Cập nhật SyncHistory ---
   if (syncRecord) {
     try {
-      const isSuccess = stats.errors.length === 0;
+      const finalStatus = cancelled ? "cancelled" : stats.errors.length === 0 ? "success" : "failed";
       await prisma.syncHistory.update({
         where: { id: syncRecord.id },
         data: {
-          status: isSuccess ? "success" : "failed",
+          status: finalStatus,
           completedAt: new Date(),
           pagesCount: stats.pages.upserted,
           conversationsCount: stats.conversations.upserted,
@@ -134,7 +172,7 @@ async function syncSinglePage(
       shopId: page.shop_id,
       timezone: page.timezone,
       connected: page.connected,
-      rawData: page as unknown as Record<string, unknown>,
+      rawData: page as unknown as Prisma.InputJsonValue,
     },
     create: {
       id: page.id,
@@ -146,7 +184,7 @@ async function syncSinglePage(
       shopId: page.shop_id,
       timezone: page.timezone,
       connected: page.connected,
-      rawData: page as unknown as Record<string, unknown>,
+      rawData: page as unknown as Prisma.InputJsonValue,
     },
   });
   stats.pages.upserted++;
@@ -157,13 +195,11 @@ async function syncSinglePage(
     const tokenRes = await generatePageAccessToken(page.id);
     pageAccessToken = tokenRes.page_access_token;
 
-    // Update token vào DB
     await prisma.page.update({
       where: { id: page.id },
       data: { pageAccessToken },
     });
   } catch {
-    // Token có thể đã có sẵn trong settings
     const existingToken =
       (page.settings as Record<string, unknown>)
         ?.page_access_token as string | undefined;
@@ -179,33 +215,22 @@ async function syncSinglePage(
     throw new Error(`Cannot get page_access_token for ${page.id}`);
   }
 
-  // --- STEP 3: Fetch all conversations (with pagination) ---
+  // --- STEP 3: Fetch conversations (incremental nếu có since) ---
   let conversations: PancakeConversation[] = [];
   try {
     conversations = await getAllConversations(page.id, pageAccessToken, since);
     console.log(
-      `[Sync]   📨 Page "${page.name}": ${conversations.length} conversations`
+      `[Sync]   📨 Page "${page.name}": ${conversations.length} conversations${since ? " (incremental)" : ""}`
     );
   } catch (err) {
-    stats.errors.push(
-      `Conversations ${page.id}: ${String(err)}`
-    );
+    stats.errors.push(`Conversations ${page.id}: ${String(err)}`);
     return;
   }
 
-  // --- STEP 4 & 5: Loop conversations → messages (concurrent, chỉ sync mới nếu incremental) ---
-  const toSync = conversations.filter((conv) => {
-    if (since && conv.updated_at && new Date(conv.updated_at) < since) {
-      stats.conversations.skipped++;
-      return false;
-    }
-    return true;
-  });
-
-  // Xử lý CONCURRENCY conv song song thay vì tuần tự
+  // --- STEP 4: Loop conversations — xử lý song song theo batch ---
   const CONCURRENCY = 5;
-  for (let i = 0; i < toSync.length; i += CONCURRENCY) {
-    const batch = toSync.slice(i, i + CONCURRENCY);
+  for (let i = 0; i < conversations.length; i += CONCURRENCY) {
+    const batch = conversations.slice(i, i + CONCURRENCY);
     await Promise.allSettled(
       batch.map((conv) =>
         syncSingleConversation(page.id, pageAccessToken, conv, stats).catch(
@@ -241,10 +266,10 @@ async function syncSingleConversation(
       customerUsername: conv.from?.username,
       lastSentById: conv.last_sent_by?.id,
       lastSentByName: conv.last_sent_by?.name,
-      assigneeIds: conv.assignee_ids as unknown as Record<string, unknown>[],
-      insertedAt: new Date(conv.inserted_at),
-      updatedAtConv: new Date(conv.updated_at),
-      rawData: conv as unknown as Record<string, unknown>,
+      assigneeIds: conv.assignee_ids as unknown as Prisma.InputJsonValue[],
+      insertedAt: parsePancakeDate(conv.inserted_at),
+      updatedAtConv: parsePancakeDate(conv.updated_at),
+      rawData: conv as unknown as Prisma.InputJsonValue,
     },
     create: {
       id: conv.id,
@@ -260,10 +285,10 @@ async function syncSingleConversation(
       customerUsername: conv.from?.username,
       lastSentById: conv.last_sent_by?.id,
       lastSentByName: conv.last_sent_by?.name,
-      assigneeIds: conv.assignee_ids as unknown as Record<string, unknown>[],
-      insertedAt: new Date(conv.inserted_at),
-      updatedAtConv: new Date(conv.updated_at),
-      rawData: conv as unknown as Record<string, unknown>,
+      assigneeIds: conv.assignee_ids as unknown as Prisma.InputJsonValue[],
+      insertedAt: parsePancakeDate(conv.inserted_at),
+      updatedAtConv: parsePancakeDate(conv.updated_at),
+      rawData: conv as unknown as Prisma.InputJsonValue,
     },
   });
   stats.conversations.upserted++;
@@ -285,29 +310,11 @@ async function syncSingleConversation(
     }
   }
 
-  // --- Save messages ---
-  for (const msg of messages) {
-    // Xác định ai gửi
-    const isFromCustomer = msg.from.id !== pageId;
-    const isFromAdmin = !isFromCustomer;
-
-    await prisma.message.upsert({
-      where: { id: msg.id },
-      update: {
-        message: msg.message,
-        type: msg.type,
-        fromId: msg.from.id,
-        fromName: msg.from.name,
-        fromUsername: msg.from.username,
-        isFromCustomer,
-        isFromAdmin,
-        seen: msg.seen,
-        hasPhone: msg.has_phone,
-        attachments: msg.attachments as unknown as Record<string, unknown>[],
-        insertedAt: new Date(msg.inserted_at),
-        rawData: msg as unknown as Record<string, unknown>,
-      },
-      create: {
+  // --- Save messages (batch insert, skip duplicates) ---
+  if (messages.length > 0) {
+    const msgData = messages.map((msg) => {
+      const isFromCustomer = msg.from.id !== pageId;
+      return {
         id: msg.id,
         conversationId: conv.id,
         pageId,
@@ -317,18 +324,25 @@ async function syncSingleConversation(
         fromName: msg.from.name,
         fromUsername: msg.from.username,
         isFromCustomer,
-        isFromAdmin,
+        isFromAdmin: !isFromCustomer,
         seen: msg.seen,
         hasPhone: msg.has_phone,
-        attachments: msg.attachments as unknown as Record<string, unknown>[],
-        insertedAt: new Date(msg.inserted_at),
-        rawData: msg as unknown as Record<string, unknown>,
-      },
+        attachments: msg.attachments as unknown as Prisma.InputJsonValue[],
+        insertedAt: parsePancakeDate(msg.inserted_at),
+        rawData: msg as unknown as Prisma.InputJsonValue,
+      };
     });
-    stats.messages.upserted++;
+
+    const result = await prisma.message.createMany({
+      data: msgData,
+      skipDuplicates: true,
+    });
+    stats.messages.upserted += result.count;
   }
 
-  // --- STEP 7: Tính SLA ---
-  await calculateSLAForConversation(conv.id, pageId);
-  stats.slaChecked++;
+  // --- Tính SLA — chỉ khi có message mới ---
+  if (needsFetch) {
+    await calculateSLAForConversation(conv.id, pageId);
+    stats.slaChecked++;
+  }
 }

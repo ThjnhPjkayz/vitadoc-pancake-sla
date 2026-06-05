@@ -1,77 +1,87 @@
 "use client";
 
-import { MessageSquare, AlertTriangle, Clock, CheckCircle } from "lucide-react";
+import { MessageSquare, AlertTriangle, CheckCircle, Clock, Moon } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { useI18n } from "@/lib/i18n";
 
 interface StatsCardsProps {
   totalConversations: number;
-  totalMessages: number;
-  lateReplyCount: number;
-  avgResponseTimeMinutes: number;
+  pendingBreachedCount: number;
+  inHoursViolations: number;
+  afterHoursViolations: number;
   slaSuccessRate: number;
 }
 
 export default function StatsCards({
   totalConversations,
-  totalMessages,
-  lateReplyCount,
-  avgResponseTimeMinutes,
+  pendingBreachedCount,
+  inHoursViolations,
+  afterHoursViolations,
   slaSuccessRate,
 }: StatsCardsProps) {
+  const { t } = useI18n();
   const successPercent = (slaSuccessRate * 100).toFixed(1);
 
   const cards = [
     {
-      label: "Total Conversations",
-      value: totalConversations.toLocaleString(),
+      label: t.stats.totalConversations,
+      value: totalConversations.toLocaleString("en-US"),
       icon: MessageSquare,
       color: "text-blue-600",
       bg: "bg-blue-50",
     },
     {
-      label: "Total Messages",
-      value: totalMessages.toLocaleString(),
-      icon: MessageSquare,
-      color: "text-indigo-600",
-      bg: "bg-indigo-50",
+      label: t.stats.slaSuccessRate,
+      value: `${successPercent}%`,
+      icon: CheckCircle,
+      color: "text-emerald-600",
+      bg: "bg-emerald-50",
     },
     {
-      label: "SLA Violations",
-      value: lateReplyCount.toLocaleString(),
+      label: t.stats.workingHoursViolations,
+      sub: t.stats.workingHoursSub,
+      value: inHoursViolations.toLocaleString("en-US"),
       icon: AlertTriangle,
       color: "text-red-600",
       bg: "bg-red-50",
     },
     {
-      label: "Avg Response Time",
-      value: `${avgResponseTimeMinutes}m`,
-      icon: Clock,
-      color: "text-amber-600",
-      bg: "bg-amber-50",
+      label: t.stats.afterHoursViolations,
+      sub: t.stats.afterHoursSub,
+      value: afterHoursViolations.toLocaleString("en-US"),
+      icon: Moon,
+      color: "text-indigo-600",
+      bg: "bg-indigo-50",
     },
     {
-      label: "SLA Success Rate",
-      value: `${successPercent}%`,
-      icon: CheckCircle,
-      color: "text-emerald-600",
-      bg: "bg-emerald-50",
+      label: t.stats.pendingSLA,
+      sub: t.stats.pendingSLASub,
+      value: pendingBreachedCount.toLocaleString("en-US"),
+      icon: Clock,
+      color: "text-rose-600",
+      bg: "bg-rose-50",
     },
   ];
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
       {cards.map((card) => (
-        <div
-          key={card.label}
-          className="rounded-xl border border-zinc-200 bg-white p-4 flex flex-col gap-2 shadow-sm hover:shadow-md transition-shadow"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-zinc-500">{card.label}</span>
-            <div className={`p-2 rounded-lg ${card.bg}`}>
-              <card.icon className={`w-4 h-4 ${card.color}`} />
+        <Card key={card.label} className="hover:shadow-md transition-shadow">
+          <CardContent className="flex flex-col gap-2 pt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">{card.label}</p>
+                {card.sub && (
+                  <p className="text-[11px] text-muted-foreground/60 mt-0.5">{card.sub}</p>
+                )}
+              </div>
+              <div className={`p-2 rounded-lg ${card.bg} shrink-0`}>
+                <card.icon className={`w-4 h-4 ${card.color}`} />
+              </div>
             </div>
-          </div>
-          <span className="text-2xl font-bold text-zinc-900">{card.value}</span>
-        </div>
+            <span className="text-2xl font-bold tracking-tight">{card.value}</span>
+          </CardContent>
+        </Card>
       ))}
     </div>
   );

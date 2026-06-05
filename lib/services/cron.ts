@@ -1,57 +1,35 @@
 // ============================================================
 // Cron Jobs
-//   Job 1 — Sync data từ Pancake (mỗi 10 phút)
-//   Job 2 — Recalculate pending SLAs từ DB (mỗi 5 phút)
+//   Job 1 — Sync full data từ Pancake (23:59 hàng ngày)
 // ============================================================
 
-import cron from "node-cron";
+import cron, { type ScheduledTask } from "node-cron";
 import { syncAllPages } from "@/lib/services/sync";
-import { recalculatePendingSLAs } from "@/lib/services/sla";
-import { prisma } from "@/lib/prisma";
 
-let syncJob: cron.ScheduledTask | null = null;
-let slaRecalcJob: cron.ScheduledTask | null = null;
+let syncJob: ScheduledTask | null = null;
+
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 5 * 60 * 1000; // 5 phút giữa mỗi retry
 
 // ----------------------------------------------------------------
-// Job 1 — Sync data từ Pancake API
+// Job 1 — Sync full data từ Pancake API (23:59 daily)
 // ----------------------------------------------------------------
 
-export function startSyncJob(intervalMinutes = 10): void {
+export function startSyncJob(): void {
   if (syncJob) {
     console.warn("[Cron/Sync] Already running, skipping...");
     return;
   }
 
-  const cronExpression = `*/${intervalMinutes} * * * *`;
+  // Chạy lúc 23:59 hàng ngày
+  const cronExpression = "59 23 * * *";
 
   syncJob = cron.schedule(cronExpression, async () => {
     console.log(`[Cron/Sync] ⏰ Triggered at ${new Date().toISOString()}`);
-
-    try {
-      const lastSync = await prisma.syncHistory.findFirst({
-        where: { status: "success" },
-        orderBy: { startedAt: "desc" },
-        select: { startedAt: true },
-      });
-
-      // Dùng startedAt - 2 phút buffer để không bỏ sót conv update trong lúc sync đang chạy
-      const since = lastSync?.startedAt
-        ? new Date(lastSync.startedAt.getTime() - 2 * 60 * 1000)
-        : undefined;
-
-      const stats = await syncAllPages(since);
-      console.log("[Cron/Sync] ✅ Done", {
-        conversations: stats.conversations.upserted,
-        skipped: stats.conversations.skipped,
-        messages: stats.messages.upserted,
-        errors: stats.errors.length,
-      });
-    } catch (err) {
-      console.error("[Cron/Sync] ❌ Failed:", err);
-    }
+    await runSyncWithRetry();
   });
 
-  console.log(`[Cron/Sync] 🕐 Scheduled every ${intervalMinutes} min (${cronExpression})`);
+  console.log(`[Cron/Sync] 🕐 Scheduled at 23:59 daily (${cronExpression})`);
 }
 
 export function stopSyncJob(): void {
@@ -63,36 +41,29 @@ export function stopSyncJob(): void {
 }
 
 // ----------------------------------------------------------------
-// Job 2 — Recalculate pending SLAs từ DB (không gọi API)
+// Retry wrapper — thử lại tối đa MAX_RETRIES lần nếu fail
 // ----------------------------------------------------------------
 
-export function startSLARecalcJob(intervalMinutes = 5): void {
-  if (slaRecalcJob) {
-    console.warn("[Cron/SLA] Already running, skipping...");
-    return;
-  }
-
-  const cronExpression = `*/${intervalMinutes} * * * *`;
-
-  slaRecalcJob = cron.schedule(cronExpression, async () => {
+async function runSyncWithRetry(): Promise<void> {
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const updated = await recalculatePendingSLAs();
-      if (updated > 0) {
-        console.log(`[Cron/SLA] ✅ Marked ${updated} conversation(s) as late`);
-      }
+      const stats = await syncAllPages();
+      console.log(`[Cron/Sync] ✅ Done (attempt ${attempt})`, {
+        conversations: stats.conversations.upserted,
+        messages: stats.messages.upserted,
+        errors: stats.errors.length,
+      });
+      return;
     } catch (err) {
-      console.error("[Cron/SLA] ❌ Failed:", err);
+      console.error(`[Cron/Sync] ❌ Attempt ${attempt}/${MAX_RETRIES} failed:`, err);
+
+      if (attempt < MAX_RETRIES) {
+        console.log(`[Cron/Sync] 🔄 Retrying in ${RETRY_DELAY_MS / 60000} min...`);
+        await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+      } else {
+        console.error("[Cron/Sync] ❌ All retries exhausted. Giving up for today.");
+      }
     }
-  });
-
-  console.log(`[Cron/SLA] 🕐 Scheduled every ${intervalMinutes} min (${cronExpression})`);
-}
-
-export function stopSLARecalcJob(): void {
-  if (slaRecalcJob) {
-    slaRecalcJob.stop();
-    slaRecalcJob = null;
-    console.log("[Cron/SLA] ⏹ Stopped");
   }
 }
 
@@ -109,10 +80,5 @@ export const stopCronJob = stopSyncJob;
 
 export async function runOnce(): Promise<void> {
   console.log("[Cron] 🔄 Manual run...");
-  try {
-    const stats = await syncAllPages();
-    console.log("[Cron] ✅ Manual sync done", stats);
-  } catch (err) {
-    console.error("[Cron] ❌ Manual sync failed:", err);
-  }
+  await runSyncWithRetry();
 }
