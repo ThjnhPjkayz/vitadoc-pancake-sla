@@ -218,9 +218,9 @@ export default function DashboardPage() {
                       ? `📄 ${syncProgress.currentPageIndex}/${syncProgress.totalPages} — ${syncProgress.currentPageName}`
                       : `📄 ${syncProgress.currentPageIndex}/${syncProgress.totalPages} pages`}
                     {" · "}
-                    {syncProgress.conversations.toLocaleString()} conversations
+                    {syncProgress.conversations.toLocaleString()} {t.conversations.conversations}
                     {" · "}
-                    {syncProgress.messages.toLocaleString()} messages
+                    {syncProgress.messages.toLocaleString()} {t.conversations.messages}
                   </span>
                 )}
               </div>

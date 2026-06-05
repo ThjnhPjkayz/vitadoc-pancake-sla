@@ -24,6 +24,8 @@ export default function ViolationsTrendChart({
   loading,
 }: ViolationsTrendChartProps) {
   const { t } = useI18n();
+  const inboxLabel = t.conversations.inboxTab;
+  const commentLabel = t.conversations.commentsTab;
 
   return (
     <Card>
@@ -66,8 +68,8 @@ export default function ViolationsTrendChart({
                 iconSize={8}
                 wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
               />
-              <Bar dataKey="inbox" name="Inbox" fill="#ef4444" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="comment" name="Comment" fill="#f97316" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="inbox" name={inboxLabel} fill="#ef4444" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="comment" name={commentLabel} fill="#f97316" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         )}

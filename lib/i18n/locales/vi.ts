@@ -69,6 +69,8 @@ const vi: Messages = {
     },
   },
   conversations: {
+    conversations: "hội thoại",
+    messages: "tin nhắn",
     inboxTab: "Hộp thư",
     inboxSLA: "SLA 15 / 30 phút",
     inboxTitle: "Hộp thư",

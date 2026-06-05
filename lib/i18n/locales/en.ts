@@ -67,6 +67,8 @@ const en = {
     },
   },
   conversations: {
+    conversations: "conversations",
+    messages: "messages",
     inboxTab: "Inbox",
     inboxSLA: "SLA 15 / 30 min",
     inboxTitle: "Inbox",

@@ -66,6 +66,7 @@ export default function FiltersBar({
       onFilterChange({ ...filters, search: localSearch });
     }, 400);
     return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localSearch]);
 
   const update = (key: string, value: string) => {

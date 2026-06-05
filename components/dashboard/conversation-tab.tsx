@@ -122,7 +122,12 @@ export interface ConversationTabProps {
 // Helpers
 // ----------------------------------------------------------------
 
-function exportToCSV(rows: ConversationRow[], filename: string) {
+function exportToCSV(
+  rows: ConversationRow[],
+  filename: string,
+  statusLabels: { outbound: string; noReply: string; late: string; onTime: string },
+  dateLocale: string
+) {
   const PLATFORM_LABELS: Record<string, string> = {
     tiktok: "TikTok",
     facebook: "Facebook",
@@ -138,11 +143,11 @@ function exportToCSV(rows: ConversationRow[], filename: string) {
         `"${(row.customerUsername ?? "").replace(/"/g, '""')}"`,
         `"${row.pageName.replace(/"/g, '""')}"`,
         PLATFORM_LABELS[row.platform] ?? row.platform,
-        row.isOutbound ? "Outbound" : !row.hasReply ? "No Reply" : row.isLateReply ? "Late" : "On Time",
+        row.isOutbound ? statusLabels.outbound : !row.hasReply ? statusLabels.noReply : row.isLateReply ? statusLabels.late : statusLabels.onTime,
         row.responseTimeMinutes ?? "",
         `"${(row.lastMessage ?? "").replace(/"/g, '""')}"`,
-        row.customerMessageAt ? new Date(row.customerMessageAt).toLocaleString("vi-VN") : "",
-        row.adminReplyAt ? new Date(row.adminReplyAt).toLocaleString("vi-VN") : "",
+        row.customerMessageAt ? new Date(row.customerMessageAt).toLocaleString(dateLocale) : "",
+        row.adminReplyAt ? new Date(row.adminReplyAt).toLocaleString(dateLocale) : "",
       ].join(",")
     ),
   ];
@@ -164,7 +169,7 @@ export default function ConversationTab({
   initialPageId = "",
   initialSlaStatus = "",
 }: ConversationTabProps) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
 
   const [typeStats, setTypeStats] = useState<TypeStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -269,7 +274,14 @@ export default function ConversationTab({
       if (!json.success) return;
 
       const date = new Date().toISOString().slice(0, 10);
-      exportToCSV(json.data as ConversationRow[], `sla-${conversationType.toLowerCase()}-${date}.csv`);
+      const statusLabels = {
+        outbound: t.table.status.outbound,
+        noReply: t.table.status.noReply,
+        late: t.table.status.late,
+        onTime: t.table.status.onTime,
+      };
+      const dateLocale = locale === "vi" ? "vi-VN" : "en-US";
+      exportToCSV(json.data as ConversationRow[], `sla-${conversationType.toLowerCase()}-${date}.csv`, statusLabels, dateLocale);
     } catch (err) {
       console.error("Export failed:", err);
     } finally {

@@ -85,8 +85,11 @@ function HoursBadge({ outside, labels }: { outside: boolean; labels: { afterHour
 }
 
 function SLABadge({ row, labels }: { row: ConversationRow; labels: { outbound: string; noReply: string; late: string; onTime: string; afterHours: string; workingHours: string } }) {
-  const [now, setNow] = useState<number | null>(null);
-  useEffect(() => { setNow(Date.now()); }, []);
+  const [now, setNow] = useState<number>(Date.now());
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(interval);
+  }, []);
 
   const hoursLabels = { afterHours: labels.afterHours, workingHours: labels.workingHours };
 
@@ -100,7 +103,7 @@ function SLABadge({ row, labels }: { row: ConversationRow; labels: { outbound: s
     );
   }
   if (!row.hasReply) {
-    const waitMs = row.customerMessageAt && now !== null
+    const waitMs = row.customerMessageAt
       ? now - new Date(row.customerMessageAt).getTime()
       : null;
     const waitHours = waitMs !== null ? Math.floor(waitMs / 3_600_000) : null;
