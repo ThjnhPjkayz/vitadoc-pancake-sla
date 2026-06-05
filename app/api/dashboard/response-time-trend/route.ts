@@ -1,6 +1,6 @@
-// GET /api/dashboard/violations-trend — SLA violations trend (last 7 days)
+// GET /api/dashboard/response-time-trend — Avg response time per day
 
-import { getViolationsTrend } from "@/lib/services/dashboard";
+import { getResponseTimeTrend } from "@/lib/services/dashboard";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   const days = Math.min(30, Math.max(7, Number(searchParams.get("days") ?? 30)));
 
   try {
-    const trend = await getViolationsTrend(days, pageId);
+    const trend = await getResponseTimeTrend(days, pageId);
     return Response.json({ success: true, trend });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

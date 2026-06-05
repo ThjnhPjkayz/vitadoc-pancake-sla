@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Loader2, Save, CheckCircle2, XCircle, Clock, Moon, Sun } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useI18n } from "@/lib/i18n";
 import type { SLAConfig } from "@/lib/services/sla-config";
 
@@ -31,7 +32,7 @@ const ALL_DAYS = [1, 2, 3, 4, 5, 6, 0]; // Mon–Sun
 function SectionLabel({ label, sub }: { label: string; sub?: string }) {
   return (
     <div className="min-w-[140px]">
-      <p className="text-sm font-medium text-zinc-700">{label}</p>
+      <p className="text-base font-medium text-zinc-700">{label}</p>
       {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
     </div>
   );
@@ -50,7 +51,7 @@ function NumberInput({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <input
+      <Input
         type="number"
         min={min}
         value={value}
@@ -58,9 +59,9 @@ function NumberInput({
           const n = parseInt(e.target.value);
           if (!isNaN(n) && n >= min) onChange(n);
         }}
-        className="w-20 h-9 rounded-lg border border-input bg-white px-3 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition tabular-nums"
+        className="w-20 tabular-nums"
       />
-      {suffix && <span className="text-sm text-muted-foreground">{suffix}</span>}
+      {suffix && <span className="text-base text-muted-foreground">{suffix}</span>}
     </div>
   );
 }
@@ -77,7 +78,7 @@ function TimeInput({
       type="time"
       value={hourToTime(value)}
       onChange={(e) => onChange(timeToHour(e.target.value))}
-      className="h-9 rounded-lg border border-input bg-white px-3 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition [color-scheme:light]"
+      className="h-9 rounded-lg border border-input bg-white px-3 text-base text-zinc-900 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition [color-scheme:light]"
     />
   );
 }
@@ -153,7 +154,7 @@ export default function ConfigPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-zinc-900">{t.config.title}</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">{t.config.description}</p>
+        <p className="text-base text-muted-foreground mt-0.5">{t.config.description}</p>
       </div>
 
       {/* Working Hours */}
@@ -295,7 +296,7 @@ export default function ConfigPage() {
         </Button>
 
         {result && (
-          <div className={`flex items-center gap-2 text-sm font-medium ${result.ok ? "text-emerald-600" : "text-red-600"}`}>
+          <div className={`flex items-center gap-2 text-base font-medium ${result.ok ? "text-emerald-600" : "text-red-600"}`}>
             {result.ok
               ? <CheckCircle2 className="w-4 h-4" />
               : <XCircle className="w-4 h-4" />}

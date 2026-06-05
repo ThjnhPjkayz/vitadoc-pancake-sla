@@ -8,16 +8,19 @@ import { useI18n } from "@/lib/i18n";
 import PageLeaderboard from "@/components/dashboard/page-leaderboard";
 import type { PageSummary } from "@/lib/services/dashboard";
 
+export type PeriodFilter = "7d" | "30d" | "month" | "all";
+
 export default function PagesPage() {
   const router = useRouter();
   const { t } = useI18n();
   const [pages, setPages] = useState<PageSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState<PeriodFilter>("30d");
 
-  const fetchPages = useCallback(async () => {
+  const fetchPages = useCallback(async (p: PeriodFilter) => {
     setLoading(true);
     try {
-      const res = await fetch("/api/dashboard/pages");
+      const res = await fetch(`/api/dashboard/pages?period=${p}`);
       const json = await res.json();
       if (json.success) setPages(json.pages);
     } catch (err) {
@@ -28,7 +31,11 @@ export default function PagesPage() {
   }, []);
 
   useEffect(() => {
-    fetchPages();
+    fetchPages(period);
+  }, [period]);
+
+  const handlePeriodChange = useCallback((p: PeriodFilter) => {
+    setPeriod(p);
   }, []);
 
   const handlePageClick = useCallback((pageId: string) => {
@@ -40,9 +47,9 @@ export default function PagesPage() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900">{t.pages.title}</h1>
-          <p className="text-sm text-muted-foreground">{t.pages.description}</p>
+          <p className="text-base text-muted-foreground">{t.pages.description}</p>
         </div>
-        <Button variant="outline" onClick={fetchPages}>
+        <Button variant="outline" onClick={() => fetchPages(period)}>
           <RefreshCw className="w-4 h-4" />
           {t.common.refresh}
         </Button>
@@ -51,6 +58,8 @@ export default function PagesPage() {
       <PageLeaderboard
         pages={pages}
         loading={loading}
+        period={period}
+        onPeriodChange={handlePeriodChange}
         onPageClick={handlePageClick}
       />
     </div>

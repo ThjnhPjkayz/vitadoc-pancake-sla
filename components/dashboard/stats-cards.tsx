@@ -1,11 +1,11 @@
 "use client";
 
-import { MessageSquare, AlertTriangle, CheckCircle, Clock, Moon } from "lucide-react";
+import { Timer, AlertTriangle, CheckCircle, Clock, Moon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useI18n } from "@/lib/i18n";
 
 interface StatsCardsProps {
-  totalConversations: number;
+  avgResponseTimeMinutes: number;
   pendingBreachedCount: number;
   inHoursViolations: number;
   afterHoursViolations: number;
@@ -13,7 +13,7 @@ interface StatsCardsProps {
 }
 
 export default function StatsCards({
-  totalConversations,
+  avgResponseTimeMinutes,
   pendingBreachedCount,
   inHoursViolations,
   afterHoursViolations,
@@ -24,9 +24,10 @@ export default function StatsCards({
 
   const cards = [
     {
-      label: t.stats.totalConversations,
-      value: totalConversations.toLocaleString("en-US"),
-      icon: MessageSquare,
+      label: t.stats.avgResponseTime,
+      sub: t.stats.avgResponseTimeSub,
+      value: avgResponseTimeMinutes > 0 ? `${avgResponseTimeMinutes}m` : "—",
+      icon: Timer,
       color: "text-blue-600",
       bg: "bg-blue-50",
     },
@@ -70,7 +71,7 @@ export default function StatsCards({
           <CardContent className="flex flex-col gap-2 pt-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">{card.label}</p>
+                <p className="text-base text-muted-foreground">{card.label}</p>
                 {card.sub && (
                   <p className="text-[11px] text-muted-foreground/60 mt-0.5">{card.sub}</p>
                 )}

@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Loader2, Download, Sun, Moon } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Loader2, Download, Sun, Moon, MessageSquare, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 import FiltersBar from "@/components/dashboard/filters-bar";
@@ -25,28 +25,45 @@ function StatCards({ stats, loading }: { stats: TypeStats | null; loading: boole
 
   if (loading) {
     return (
-      <div className="grid grid-cols-2 gap-4">
-        {Array.from({ length: 2 }).map((_, i) => (
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {Array.from({ length: 5 }).map((_, i) => (
           <div key={i} className="h-20 rounded-xl bg-zinc-100 animate-pulse" />
         ))}
       </div>
     );
   }
 
+  const total = stats?.total ?? 0;
+  const pending = stats?.pending ?? 0;
+
   const cards = [
     {
-      label: t.conversations.lateWorkingHours,
-      late: stats?.lateWorkingHours ?? 0,
-      total: stats?.totalWorkingHours ?? 0,
-      icon: Sun,
+      label: t.conversations.statTotal,
+      value: total.toLocaleString("en-US"),
+      icon: MessageSquare,
+      color: "text-blue-600",
+      bg: "bg-blue-50",
+      border: "border-blue-100",
+    },
+    {
+      label: t.conversations.statPending,
+      value: pending.toLocaleString("en-US"),
+      icon: Clock,
       color: "text-amber-600",
       bg: "bg-amber-50",
       border: "border-amber-100",
     },
     {
+      label: t.conversations.lateWorkingHours,
+      value: `${(stats?.lateWorkingHours ?? 0).toLocaleString("en-US")} / ${(stats?.totalWorkingHours ?? 0).toLocaleString("en-US")}`,
+      icon: Sun,
+      color: "text-orange-600",
+      bg: "bg-orange-50",
+      border: "border-orange-100",
+    },
+    {
       label: t.conversations.lateAfterHours,
-      late: stats?.lateAfterHours ?? 0,
-      total: stats?.totalAfterHours ?? 0,
+      value: `${(stats?.lateAfterHours ?? 0).toLocaleString("en-US")} / ${(stats?.totalAfterHours ?? 0).toLocaleString("en-US")}`,
       icon: Moon,
       color: "text-indigo-600",
       bg: "bg-indigo-50",
@@ -55,18 +72,15 @@ function StatCards({ stats, loading }: { stats: TypeStats | null; loading: boole
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-4">
-      {cards.map(({ label, late, total, icon: Icon, color, bg, border }) => (
-        <div key={label} className={`rounded-xl border ${border} ${bg} px-5 py-4 flex items-center gap-4`}>
-          <div className={`p-2 rounded-lg bg-white/60 ${color}`}>
-            <Icon className="w-5 h-5" />
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {cards.map(({ label, value, icon: Icon, color, bg, border }) => (
+        <div key={label} className={`rounded-xl border ${border} ${bg} px-4 py-3 flex items-center gap-3`}>
+          <div className={`p-2 rounded-lg bg-white/60 shrink-0 ${color}`}>
+            <Icon className="w-4 h-4" />
           </div>
-          <div>
-            <p className="text-xs text-zinc-500 font-medium">{label}</p>
-            <div className="flex items-baseline gap-1.5">
-              <p className={`text-2xl font-bold ${color}`}>{late.toLocaleString("en-US")}</p>
-              <p className="text-sm text-zinc-400">/ {total.toLocaleString("en-US")}</p>
-            </div>
+          <div className="min-w-0">
+            <p className="text-xs text-zinc-500 font-medium truncate">{label}</p>
+            <p className={`text-xl font-bold ${color}`}>{value}</p>
           </div>
         </div>
       ))}
@@ -197,19 +211,38 @@ export default function ConversationTab({
   const [tableLoading, setTableLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
+  const fetchStats = useCallback(async (f: FilterState) => {
+    setStatsLoading(true);
+    try {
+      const params = new URLSearchParams({ type: conversationType });
+      if (f.pageId) params.set("pageId", f.pageId);
+      if (f.platform) params.set("platform", f.platform);
+      if (f.dateFrom) params.set("dateFrom", f.dateFrom);
+      if (f.dateTo) params.set("dateTo", f.dateTo);
+      const res = await fetch(`/api/dashboard/conversation-stats?${params}`);
+      const json = await res.json();
+      if (json.success) setTypeStats(json.stats);
+    } catch (err) {
+      console.error("Failed to fetch stats:", err);
+    } finally {
+      setStatsLoading(false);
+    }
+  }, [conversationType]);
+
+  const isFirstRender = useRef(true);
+
   useEffect(() => {
     fetch("/api/dashboard/conversations?options=true")
       .then((r) => r.json())
       .then((json) => { if (json.success) setFilterOptions(json.options); })
       .catch(console.error);
-
-    setStatsLoading(true);
-    fetch(`/api/dashboard/conversation-stats?type=${conversationType}`)
-      .then((r) => r.json())
-      .then((json) => { if (json.success) setTypeStats(json.stats); })
-      .catch(console.error)
-      .finally(() => setStatsLoading(false));
+    fetchStats(filters);
   }, [conversationType]);
+
+  useEffect(() => {
+    if (isFirstRender.current) { isFirstRender.current = false; return; }
+    fetchStats(filters);
+  }, [filters.pageId, filters.platform, filters.dateFrom, filters.dateTo]);
 
   const fetchTable = useCallback(async () => {
     setTableLoading(true);

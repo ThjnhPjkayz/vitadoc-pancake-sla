@@ -28,6 +28,13 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useI18n } from "@/lib/i18n";
 
 interface ConversationRow {
@@ -70,36 +77,32 @@ const PLATFORM_LABELS: Record<string, string> = {
 function HoursBadge({ outside, labels }: { outside: boolean; labels: { afterHours: string; workingHours: string } }) {
   if (outside) {
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] text-indigo-500 font-medium">
+      <span className="inline-flex items-center gap-1 text-sm text-indigo-500 font-medium">
         <Moon className="w-3 h-3" />
         {labels.afterHours}
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 text-[11px] text-amber-500 font-medium">
+    <span className="inline-flex items-center gap-1 text-sm text-amber-500 font-medium">
       <Sun className="w-3 h-3" />
       {labels.workingHours}
     </span>
   );
 }
 
-function SLABadge({ row, labels }: { row: ConversationRow; labels: { outbound: string; noReply: string; late: string; onTime: string; afterHours: string; workingHours: string } }) {
+function SLABadge({ row, labels }: { row: ConversationRow; labels: { outbound: string; noReply: string; late: string; onTime: string } }) {
   const [now, setNow] = useState<number>(Date.now());
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(interval);
   }, []);
 
-  const hoursLabels = { afterHours: labels.afterHours, workingHours: labels.workingHours };
-
   if (row.isOutbound) {
     return (
-      <div className="flex flex-col gap-1">
-        <Badge className="bg-violet-50 text-violet-600 border-violet-200 hover:bg-violet-50">
-          {labels.outbound}
-        </Badge>
-      </div>
+      <Badge className="bg-violet-50 text-violet-600 border-violet-200 hover:bg-violet-50">
+        {labels.outbound}
+      </Badge>
     );
   }
   if (!row.hasReply) {
@@ -110,29 +113,18 @@ function SLABadge({ row, labels }: { row: ConversationRow; labels: { outbound: s
     const waitLabel =
       waitHours === null ? "" : waitHours < 1 ? " · <1h" : waitHours < 24 ? ` · ${waitHours}h` : ` · ${Math.floor(waitHours / 24)}d`;
     return (
-      <div className="flex flex-col gap-1">
-        <Badge className="bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-50 whitespace-nowrap">
-          {labels.noReply}{waitLabel}
-        </Badge>
-        <HoursBadge outside={row.outsideBusinessHours} labels={hoursLabels} />
-      </div>
+      <Badge className="bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-50 whitespace-nowrap">
+        {labels.noReply}{waitLabel}
+      </Badge>
     );
   }
   if (row.isLateReply) {
-    return (
-      <div className="flex flex-col gap-1">
-        <Badge variant="destructive">{labels.late}</Badge>
-        <HoursBadge outside={row.outsideBusinessHours} labels={hoursLabels} />
-      </div>
-    );
+    return <Badge variant="destructive">{labels.late}</Badge>;
   }
   return (
-    <div className="flex flex-col gap-1">
-      <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50">
-        {labels.onTime}
-      </Badge>
-      <HoursBadge outside={row.outsideBusinessHours} labels={hoursLabels} />
-    </div>
+    <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50">
+      {labels.onTime}
+    </Badge>
   );
 }
 
@@ -161,6 +153,9 @@ export default function ConversationsTable({
     noReply: t.table.status.noReply,
     late: t.table.status.late,
     onTime: t.table.status.onTime,
+  };
+
+  const hoursLabels = {
     afterHours: t.table.hours.afterHours,
     workingHours: t.table.hours.workingHours,
   };
@@ -176,7 +171,7 @@ export default function ConversationsTable({
             <div className="text-sm max-w-[160px] truncate font-medium">
               {row.original.pageName}
             </div>
-            <div className="text-xs text-muted-foreground">
+            <div className="text-sm text-muted-foreground">
               {PLATFORM_LABELS[row.original.platform] ?? row.original.platform}
             </div>
           </div>
@@ -192,7 +187,7 @@ export default function ConversationsTable({
               {row.original.customerName ?? "Unknown"}
             </div>
             {row.original.customerUsername && (
-              <div className="text-xs text-muted-foreground">
+              <div className="text-sm text-muted-foreground">
                 @{row.original.customerUsername}
               </div>
             )}
@@ -200,21 +195,18 @@ export default function ConversationsTable({
         ),
       },
       {
-        id: "conversationType",
-        header: t.table.col.type,
-        accessorKey: "conversationType",
-        cell: ({ row }) => (
-          <Badge
-            variant="outline"
-            className={
-              row.original.conversationType === "INBOX"
-                ? "border-blue-200 text-blue-700 bg-blue-50"
-                : "border-purple-200 text-purple-700 bg-purple-50"
-            }
-          >
-            {row.original.conversationType}
-          </Badge>
-        ),
+        id: "lastMessage",
+        header: t.table.col.lastMessage,
+        accessorKey: "lastMessage",
+        cell: ({ row }) => {
+          const msg = row.original.lastMessage;
+          if (!msg) return <span className="text-muted-foreground/40 text-sm">—</span>;
+          return (
+            <span className="text-sm text-zinc-600 max-w-[220px] block truncate" title={msg}>
+              {msg}
+            </span>
+          );
+        },
       },
       {
         id: "responseTime",
@@ -237,13 +229,21 @@ export default function ConversationsTable({
         cell: ({ row }) => <SLABadge row={row.original} labels={slaLabels} />,
       },
       {
+        id: "hours",
+        header: t.table.col.hours,
+        accessorKey: "outsideBusinessHours",
+        cell: ({ row }) => (
+          <HoursBadge outside={row.original.outsideBusinessHours} labels={hoursLabels} />
+        ),
+      },
+      {
         id: "customerMessageAt",
         header: t.table.col.customerMsg,
         accessorKey: "customerMessageAt",
         cell: ({ row }) => {
           const date = row.original.customerMessageAt;
           return (
-            <span className="text-xs text-muted-foreground whitespace-nowrap">
+            <span className="text-sm text-muted-foreground whitespace-nowrap">
               {date ? formatDate(date) : "—"}
             </span>
           );
@@ -256,7 +256,7 @@ export default function ConversationsTable({
         cell: ({ row }) => {
           const date = row.original.adminReplyAt;
           return (
-            <span className="text-xs text-muted-foreground whitespace-nowrap">
+            <span className="text-sm text-muted-foreground whitespace-nowrap">
               {date ? formatDate(date) : <span className="text-muted-foreground/30">—</span>}
             </span>
           );
@@ -344,15 +344,18 @@ export default function ConversationsTable({
           <span>
             {total > 0 ? `${start}–${end} ${t.table.of} ${total}` : t.common.noResults}
           </span>
-          <select
-            value={pageSize}
-            onChange={(e) => onPageSizeChange(Number(e.target.value))}
-            className="h-7 px-2 text-xs rounded border border-input bg-background text-foreground"
-          >
-            {[10, 20, 50, 100].map((s) => (
-              <option key={s} value={s}>{s}{t.table.perPage}</option>
-            ))}
-          </select>
+          <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
+            <SelectTrigger className="h-7 text-xs w-auto min-w-[80px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {[10, 20, 50, 100].map((s) => (
+                <SelectItem key={s} value={String(s)} className="text-xs">
+                  {s}{t.table.perPage}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex items-center gap-1">

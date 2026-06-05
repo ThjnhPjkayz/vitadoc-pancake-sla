@@ -58,7 +58,7 @@ export default function FiltersBar({
   pages,
   platforms,
 }: FiltersBarProps) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const [localSearch, setLocalSearch] = useState(filters.search);
 
   useEffect(() => {
@@ -83,12 +83,34 @@ export default function FiltersBar({
     filters.dateTo;
 
   const SLA_STATUS_OPTIONS = [
-    { value: "_all", label: t.filters.allStatuses },
+    { value: ALL, label: t.filters.allStatuses },
     { value: "late", label: t.filters.lateReply },
     { value: "no-reply", label: t.filters.noReply },
     { value: "on-time", label: t.filters.onTime },
     { value: "outbound", label: t.filters.outbound },
   ];
+
+  const HOURS_OPTIONS = [
+    { value: ALL, label: t.filters.allHours },
+    { value: "in-hours", label: t.filters.inHours },
+    { value: "after-hours", label: t.filters.afterHoursOption },
+  ];
+
+  const pageDisplayLabel = filters.pageId
+    ? (pages.find((p) => p.id === filters.pageId)?.name ?? t.filters.allPages)
+    : t.filters.allPages;
+
+  const platformDisplayLabel = filters.platform
+    ? (PLATFORM_LABELS[filters.platform] ?? filters.platform)
+    : t.filters.allPlatforms;
+
+  const slaDisplayLabel =
+    SLA_STATUS_OPTIONS.find((o) => o.value === (filters.slaStatus || ALL))?.label ??
+    t.filters.allStatuses;
+
+  const hoursDisplayLabel =
+    HOURS_OPTIONS.find((o) => o.value === (filters.hoursFilter || ALL))?.label ??
+    t.filters.allHours;
 
   return (
     <div className="flex flex-wrap items-end gap-3">
@@ -109,12 +131,11 @@ export default function FiltersBar({
       {/* Page filter */}
       <FilterField label={t.filters.page}>
         <Select
-          key={`page-${locale}`}
           value={filters.pageId || ALL}
-          onValueChange={(v) => update("pageId", !v || v === ALL ? "" : v)}
+          onValueChange={(v) => update("pageId", v === ALL ? "" : v)}
         >
           <SelectTrigger className="min-w-[130px]">
-            <SelectValue placeholder={t.filters.allPages} />
+            <SelectValue>{pageDisplayLabel}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>{t.filters.allPages}</SelectItem>
@@ -130,12 +151,11 @@ export default function FiltersBar({
       {/* Platform filter */}
       <FilterField label={t.filters.platform}>
         <Select
-          key={`platform-${locale}`}
           value={filters.platform || ALL}
-          onValueChange={(v) => update("platform", !v || v === ALL ? "" : v)}
+          onValueChange={(v) => update("platform", v === ALL ? "" : v)}
         >
           <SelectTrigger className="min-w-[130px]">
-            <SelectValue placeholder={t.filters.allPlatforms} />
+            <SelectValue>{platformDisplayLabel}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>{t.filters.allPlatforms}</SelectItem>
@@ -151,12 +171,11 @@ export default function FiltersBar({
       {/* SLA Status */}
       <FilterField label={t.filters.slaStatus}>
         <Select
-          key={`sla-${locale}`}
           value={filters.slaStatus || ALL}
-          onValueChange={(v) => update("slaStatus", !v || v === ALL ? "" : v)}
+          onValueChange={(v) => update("slaStatus", v === ALL ? "" : v)}
         >
           <SelectTrigger className="min-w-[150px]">
-            <SelectValue placeholder={t.filters.allStatuses} />
+            <SelectValue>{slaDisplayLabel}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             {SLA_STATUS_OPTIONS.map((o) => (
@@ -171,17 +190,18 @@ export default function FiltersBar({
       {/* Hours filter */}
       <FilterField label={t.filters.hours}>
         <Select
-          key={`hours-${locale}`}
           value={filters.hoursFilter || ALL}
-          onValueChange={(v) => update("hoursFilter", !v || v === ALL ? "" : v)}
+          onValueChange={(v) => update("hoursFilter", v === ALL ? "" : v)}
         >
           <SelectTrigger className="min-w-[140px]">
-            <SelectValue placeholder={t.filters.allHours} />
+            <SelectValue>{hoursDisplayLabel}</SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t.filters.allHours}</SelectItem>
-            <SelectItem value="in-hours">{t.filters.inHours}</SelectItem>
-            <SelectItem value="after-hours">{t.filters.afterHoursOption}</SelectItem>
+            {HOURS_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </FilterField>
@@ -194,7 +214,7 @@ export default function FiltersBar({
             type="date"
             value={filters.dateFrom}
             onChange={(e) => update("dateFrom", e.target.value)}
-            className="h-8 pl-8 pr-2.5 text-sm rounded-lg border border-input bg-transparent text-foreground transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 [color-scheme:light]"
+            className="h-8 pl-8 pr-2.5 text-base rounded-lg border border-input bg-transparent text-foreground transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 [color-scheme:light]"
           />
         </div>
       </FilterField>
@@ -207,7 +227,7 @@ export default function FiltersBar({
             type="date"
             value={filters.dateTo}
             onChange={(e) => update("dateTo", e.target.value)}
-            className="h-8 pl-8 pr-2.5 text-sm rounded-lg border border-input bg-transparent text-foreground transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 [color-scheme:light]"
+            className="h-8 pl-8 pr-2.5 text-base rounded-lg border border-input bg-transparent text-foreground transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 [color-scheme:light]"
           />
         </div>
       </FilterField>

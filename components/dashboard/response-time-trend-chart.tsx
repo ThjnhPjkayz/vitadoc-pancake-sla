@@ -1,8 +1,8 @@
 "use client";
 
 import {
-  BarChart,
-  Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -12,59 +12,35 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useI18n } from "@/lib/i18n";
-import type { ViolationsTrendDay } from "@/lib/services/dashboard";
+import type { ResponseTimeTrendDay } from "@/lib/services/dashboard";
+import type { ChartPeriod } from "./violations-trend-chart";
 
-export type ChartPeriod = 7 | 14 | 30;
-
-interface ViolationsTrendChartProps {
-  data: ViolationsTrendDay[];
+interface ResponseTimeTrendChartProps {
+  data: ResponseTimeTrendDay[];
   loading?: boolean;
   period?: ChartPeriod;
-  onPeriodChange?: (p: ChartPeriod) => void;
 }
 
-export default function ViolationsTrendChart({
+export default function ResponseTimeTrendChart({
   data,
   loading,
   period = 30,
-  onPeriodChange,
-}: ViolationsTrendChartProps) {
+}: ResponseTimeTrendChartProps) {
   const { t } = useI18n();
-
-  const periods: { value: ChartPeriod; label: string }[] = [
-    { value: 7, label: t.dashboard.period7d },
-    { value: 14, label: t.dashboard.period14d },
-    { value: 30, label: t.dashboard.period30d },
-  ];
 
   return (
     <Card>
-      <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+      <CardHeader className="pb-2">
         <CardTitle className="text-base font-medium text-muted-foreground">
-          {t.dashboard.violationsTitle}
+          {t.dashboard.responseTimeTitle}
         </CardTitle>
-        <div className="flex items-center gap-1 rounded-lg border bg-muted/40 p-0.5">
-          {periods.map((p) => (
-            <button
-              key={p.value}
-              onClick={() => onPeriodChange?.(p.value)}
-              className={`px-3 py-1 text-xs rounded-md transition-colors font-medium ${
-                period === p.value
-                  ? "bg-white text-zinc-900 shadow-sm"
-                  : "text-muted-foreground hover:text-zinc-700"
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
       </CardHeader>
       <CardContent>
         {loading ? (
           <div className="h-48 rounded-lg bg-zinc-100 animate-pulse" />
         ) : (
           <ResponsiveContainer width="100%" height={192}>
-            <BarChart data={data} barCategoryGap="30%">
+            <LineChart data={data}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
               <XAxis
                 dataKey="date"
@@ -79,24 +55,44 @@ export default function ViolationsTrendChart({
                 axisLine={false}
                 tickLine={false}
                 width={28}
+                unit="m"
               />
               <Tooltip
-                cursor={{ fill: "#f9fafb" }}
+                cursor={{ stroke: "#e5e7eb" }}
                 contentStyle={{
                   fontSize: 12,
                   border: "1px solid #e5e7eb",
                   borderRadius: 8,
                   boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
                 }}
+                formatter={(value) => [`${value}m`, undefined]}
               />
               <Legend
                 iconType="circle"
                 iconSize={8}
                 wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
               />
-              <Bar dataKey="onTime" name={t.dashboard.chartOnTime} stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} />
-              <Bar dataKey="late" name={t.dashboard.chartLate} stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
-            </BarChart>
+              <Line
+                type="monotone"
+                dataKey="inbox"
+                name={t.dashboard.chartInbox}
+                stroke="#3b82f6"
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4 }}
+                connectNulls={false}
+              />
+              <Line
+                type="monotone"
+                dataKey="comment"
+                name={t.dashboard.chartComment}
+                stroke="#f97316"
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4 }}
+                connectNulls={false}
+              />
+            </LineChart>
           </ResponsiveContainer>
         )}
       </CardContent>

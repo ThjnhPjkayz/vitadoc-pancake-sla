@@ -11,6 +11,9 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  if (process.env.NODE_ENV === "development") {
+    return Response.json({ success: false, error: "Sync bị tắt trên môi trường local" }, { status: 403 });
+  }
   // Kiểm tra có sync nào đang chạy không (bỏ qua nếu stale > 30 phút)
   const STALE_THRESHOLD_MS = 30 * 60 * 1000;
   const running = await prisma.syncHistory.findFirst({

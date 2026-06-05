@@ -13,9 +13,10 @@ import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 
 import StatsCards from "@/components/dashboard/stats-cards";
-import ViolationsTrendChart from "@/components/dashboard/violations-trend-chart";
+import ViolationsTrendChart, { type ChartPeriod } from "@/components/dashboard/violations-trend-chart";
+import ResponseTimeTrendChart from "@/components/dashboard/response-time-trend-chart";
 
-import type { DashboardStats, ViolationsTrendDay } from "@/lib/services/dashboard";
+import type { DashboardStats, ViolationsTrendDay, ResponseTimeTrendDay } from "@/lib/services/dashboard";
 
 export default function DashboardPage() {
   const { t } = useI18n();
@@ -25,6 +26,9 @@ export default function DashboardPage() {
 
   const [trendData, setTrendData] = useState<ViolationsTrendDay[]>([]);
   const [trendLoading, setTrendLoading] = useState(true);
+  const [responseTimeTrendData, setResponseTimeTrendData] = useState<ResponseTimeTrendDay[]>([]);
+  const [responseTimeTrendLoading, setResponseTimeTrendLoading] = useState(true);
+  const [chartPeriod, setChartPeriod] = useState<ChartPeriod>(30);
 
   const [syncing, setSyncing] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
@@ -53,16 +57,25 @@ export default function DashboardPage() {
     }
   }, []);
 
-  const fetchTrend = useCallback(async () => {
+  const fetchTrend = useCallback(async (days: ChartPeriod) => {
     setTrendLoading(true);
+    setResponseTimeTrendLoading(true);
     try {
-      const res = await fetch("/api/dashboard/violations-trend");
-      const json = await res.json();
-      if (json.success) setTrendData(json.trend);
+      const [violationsRes, responseTimeRes] = await Promise.all([
+        fetch(`/api/dashboard/violations-trend?days=${days}`),
+        fetch(`/api/dashboard/response-time-trend?days=${days}`),
+      ]);
+      const [violationsJson, responseTimeJson] = await Promise.all([
+        violationsRes.json(),
+        responseTimeRes.json(),
+      ]);
+      if (violationsJson.success) setTrendData(violationsJson.trend);
+      if (responseTimeJson.success) setResponseTimeTrendData(responseTimeJson.trend);
     } catch (err) {
       console.error("Failed to fetch trend:", err);
     } finally {
       setTrendLoading(false);
+      setResponseTimeTrendLoading(false);
     }
   }, []);
 
@@ -118,7 +131,7 @@ export default function DashboardPage() {
         setSyncing(false);
         setSyncResult({ type: "success", message: t.dashboard.syncSuccess });
         fetchStats();
-        fetchTrend();
+        fetchTrend(chartPeriod);
         clearInterval(interval);
       } else if (status === "failed") {
         setSyncing(false);
@@ -141,12 +154,15 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchStats();
-    fetchTrend();
-    // Khôi phục trạng thái sync nếu đang chạy dở
+    fetchTrend(chartPeriod);
     checkSyncStatus().then((status) => {
       if (status === "running") setSyncing(true);
     });
   }, []);
+
+  useEffect(() => {
+    fetchTrend(chartPeriod);
+  }, [chartPeriod]);
 
   return (
     <div className="space-y-6">
@@ -154,7 +170,7 @@ export default function DashboardPage() {
       <div className="flex items-start justify-between">
         <div className="space-y-2">
           <h1 className="text-2xl font-bold text-zinc-900">{t.dashboard.title}</h1>
-          <p className="text-sm text-muted-foreground">{t.dashboard.description}</p>
+          <p className="text-base text-muted-foreground">{t.dashboard.description}</p>
           {lastSyncAt ? (
             <span className="inline-flex items-center gap-1.5 text-xs text-zinc-400">
               <Clock className="w-3.5 h-3.5" />
@@ -189,7 +205,7 @@ export default function DashboardPage() {
               {t.dashboard.fullSync}
             </Button>
           )}
-          <Button variant="outline" onClick={() => { fetchStats(); fetchTrend(); }}>
+          <Button variant="outline" onClick={() => { fetchStats(); fetchTrend(chartPeriod); }}>
             <RefreshCw className="w-4 h-4" />
             {t.common.refresh}
           </Button>
@@ -199,7 +215,7 @@ export default function DashboardPage() {
       {/* Sync Banner */}
       {(syncing || syncResult) && (
         <div
-          className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium border ${
+          className={`flex items-center gap-3 px-4 py-3 rounded-lg text-base font-medium border ${
             syncing
               ? "bg-blue-50 border-blue-200 text-blue-800"
               : syncResult?.type === "success"
@@ -242,7 +258,7 @@ export default function DashboardPage() {
       {/* Stats Cards */}
       {stats && !statsLoading ? (
         <StatsCards
-          totalConversations={stats.totalConversations}
+          avgResponseTimeMinutes={stats.avgResponseTimeMinutes}
           pendingBreachedCount={stats.pendingBreachedCount}
           inHoursViolations={stats.inHoursViolations}
           afterHoursViolations={stats.afterHoursViolations}
@@ -256,8 +272,20 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Trend Chart */}
-      <ViolationsTrendChart data={trendData} loading={trendLoading} />
+      {/* Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <ViolationsTrendChart
+          data={trendData}
+          loading={trendLoading}
+          period={chartPeriod}
+          onPeriodChange={setChartPeriod}
+        />
+        <ResponseTimeTrendChart
+          data={responseTimeTrendData}
+          loading={responseTimeTrendLoading}
+          period={chartPeriod}
+        />
+      </div>
     </div>
   );
 }

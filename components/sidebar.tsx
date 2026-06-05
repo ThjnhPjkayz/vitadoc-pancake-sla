@@ -26,9 +26,9 @@ export default function Sidebar() {
             <Link
               key={href}
               href={href}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-base font-medium transition-colors ${
                 active
-                  ? "bg-zinc-100 text-zinc-900"
+                  ? "bg-blue-50 text-blue-700 font-medium"
                   : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800"
               }`}
             >

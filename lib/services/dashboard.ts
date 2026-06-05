@@ -100,10 +100,13 @@ export interface PageSummary {
   platform: string;
   total: number;
   lateCount: number;
-  pendingCount: number;
+  pendingCount: number;         // all unreplied (used for onTimeCount)
+  pendingBreachedCount: number; // unreplied AND past SLA threshold
   onTimeCount: number;
   avgResponseTimeMinutes: number;
-  lateRate: number; // 0–1
+  avgInboxResponseTimeMinutes: number;
+  avgCommentResponseTimeMinutes: number;
+  lateRate: number; // 0–1, computed over resolved conversations only
 }
 
 // ----------------------------------------------------------------
@@ -196,7 +199,11 @@ export async function getDashboardStats(
 // Get Page Summaries (leaderboard)
 // ----------------------------------------------------------------
 
-export async function getPageSummaries(): Promise<PageSummary[]> {
+export async function getPageSummaries(dateFrom?: Date): Promise<PageSummary[]> {
+  const dateFilter = dateFrom
+    ? Prisma.sql`AND s."customerMessageAt" >= ${dateFrom}`
+    : Prisma.sql``;
+
   const rows = await prisma.$queryRaw<
     Array<{
       pageId: string;
@@ -205,41 +212,62 @@ export async function getPageSummaries(): Promise<PageSummary[]> {
       total: bigint;
       lateCount: bigint;
       pendingCount: bigint;
+      pendingBreachedCount: bigint;
       avgResponseTimeMinutes: number | null;
+      avgInboxResponseTimeMinutes: number | null;
+      avgCommentResponseTimeMinutes: number | null;
     }>
   >(Prisma.sql`
     SELECT
       p.id                                                           AS "pageId",
       p.name                                                         AS "pageName",
       p.platform,
-      COUNT(CASE WHEN s."slaStatus" != 'outbound' THEN 1 END)                              AS total,
-      SUM(CASE WHEN s."isLateReply" = true THEN 1 ELSE 0 END)                             AS "lateCount",
-      COUNT(CASE WHEN s."responseTimeMinutes" IS NULL AND s."slaStatus" != 'outbound' THEN 1 END) AS "pendingCount",
-      ROUND(AVG(CASE WHEN s."responseTimeMinutes" IS NOT NULL THEN s."responseTimeMinutes" END))  AS "avgResponseTimeMinutes"
+      COUNT(CASE WHEN s."slaStatus" != 'outbound' THEN 1 END)       AS total,
+      SUM(CASE WHEN s."isLateReply" = true THEN 1 ELSE 0 END)       AS "lateCount",
+      COUNT(CASE WHEN s."responseTimeMinutes" IS NULL
+                      AND s."slaStatus" != 'outbound'
+                 THEN 1 END)                                         AS "pendingCount",
+      COUNT(CASE WHEN s."responseTimeMinutes" IS NULL
+                      AND s."slaStatus" != 'outbound'
+                      AND (
+                        (s."conversationType" = 'INBOX'   AND s."customerMessageAt" < NOW() - INTERVAL '15 minutes')
+                        OR
+                        (s."conversationType" = 'COMMENT' AND s."customerMessageAt" < NOW() - INTERVAL '60 minutes')
+                      )
+                 THEN 1 END)                                         AS "pendingBreachedCount",
+      ROUND(AVG(CASE WHEN s."responseTimeMinutes" IS NOT NULL THEN s."responseTimeMinutes" END))                                                          AS "avgResponseTimeMinutes",
+      ROUND(AVG(CASE WHEN s."responseTimeMinutes" IS NOT NULL AND s."conversationType" = 'INBOX'   THEN s."responseTimeMinutes" END))                     AS "avgInboxResponseTimeMinutes",
+      ROUND(AVG(CASE WHEN s."responseTimeMinutes" IS NOT NULL AND s."conversationType" = 'COMMENT' THEN s."responseTimeMinutes" END))                     AS "avgCommentResponseTimeMinutes"
     FROM "Page" p
-    LEFT JOIN "SLAViolation" s ON s."pageId" = p.id
+    LEFT JOIN "SLAViolation" s ON s."pageId" = p.id ${dateFilter}
     WHERE p."isActivated" = true
     GROUP BY p.id, p.name, p.platform
-    ORDER BY "lateCount" DESC
   `);
 
-  return rows.map((r) => {
-    const total = Number(r.total);
-    const lateCount = Number(r.lateCount);
-    const pendingCount = Number(r.pendingCount);
-    const onTimeCount = total - lateCount - pendingCount;
-    return {
-      pageId: r.pageId,
-      pageName: r.pageName,
-      platform: r.platform,
-      total,
-      lateCount,
-      pendingCount,
-      onTimeCount: Math.max(0, onTimeCount),
-      avgResponseTimeMinutes: r.avgResponseTimeMinutes ? Math.round(r.avgResponseTimeMinutes) : 0,
-      lateRate: total > 0 ? lateCount / total : 0,
-    };
-  });
+  return rows
+    .map((r) => {
+      const total = Number(r.total);
+      const lateCount = Number(r.lateCount);
+      const pendingCount = Number(r.pendingCount);
+      const pendingBreachedCount = Number(r.pendingBreachedCount);
+      const resolvedCount = total - pendingCount;
+      const onTimeCount = Math.max(0, total - lateCount - pendingCount);
+      return {
+        pageId: r.pageId,
+        pageName: r.pageName,
+        platform: r.platform,
+        total,
+        lateCount,
+        pendingCount,
+        pendingBreachedCount,
+        onTimeCount,
+        avgResponseTimeMinutes: r.avgResponseTimeMinutes ? Math.round(r.avgResponseTimeMinutes) : 0,
+        avgInboxResponseTimeMinutes: r.avgInboxResponseTimeMinutes ? Math.round(r.avgInboxResponseTimeMinutes) : 0,
+        avgCommentResponseTimeMinutes: r.avgCommentResponseTimeMinutes ? Math.round(r.avgCommentResponseTimeMinutes) : 0,
+        lateRate: resolvedCount > 0 ? lateCount / resolvedCount : 0,
+      };
+    })
+    .sort((a, b) => b.lateRate - a.lateRate);
 }
 
 // ----------------------------------------------------------------
@@ -373,11 +401,23 @@ export interface ConversationTypeStats {
 
 export async function getConversationTypeStats(
   conversationType: "INBOX" | "COMMENT",
-  pageId?: string
+  pageId?: string,
+  platform?: string,
+  dateFrom?: string,
+  dateTo?: string
 ): Promise<ConversationTypeStats> {
   const where = {
     conversationType,
     ...(pageId ? { pageId } : {}),
+    ...(platform ? { page: { platform } } : {}),
+    ...(dateFrom || dateTo
+      ? {
+          customerMessageAt: {
+            ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
+            ...(dateTo ? { lte: new Date(dateTo + "T23:59:59.999Z") } : {}),
+          },
+        }
+      : {}),
   };
 
   const [lateWorkingHours, totalWorkingHours, lateAfterHours, totalAfterHours, pending, total] = await Promise.all([
@@ -492,48 +532,111 @@ export async function getSLAChartData(
 
 export interface ViolationsTrendDay {
   date: string; // "DD/MM"
-  inbox: number;
-  comment: number;
+  late: number;
+  onTime: number;
 }
 
 export async function getViolationsTrend(
+  days = 30,
   pageId?: string
 ): Promise<ViolationsTrendDay[]> {
   const wherePage = pageId ? { pageId } : {};
 
   const since = new Date();
-  since.setDate(since.getDate() - 29);
+  since.setDate(since.getDate() - (days - 1));
   since.setHours(0, 0, 0, 0);
 
-  const violations = await prisma.sLAViolation.findMany({
+  const records = await prisma.sLAViolation.findMany({
     where: {
       ...wherePage,
-      isLateReply: true,
+      responseTimeMinutes: { not: null },
       customerMessageAt: { gte: since },
     },
-    select: { customerMessageAt: true, conversationType: true },
+    select: { customerMessageAt: true, isLateReply: true },
   });
 
-  const grouped: Record<string, { inbox: number; comment: number }> = {};
-  for (let i = 29; i >= 0; i--) {
+  const grouped: Record<string, { late: number; onTime: number }> = {};
+  for (let i = days - 1; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
     const key = d.toISOString().slice(0, 10);
-    grouped[key] = { inbox: 0, comment: 0 };
+    grouped[key] = { late: 0, onTime: 0 };
   }
 
-  for (const v of violations) {
-    if (!v.customerMessageAt) continue;
-    const key = v.customerMessageAt.toISOString().slice(0, 10);
+  for (const r of records) {
+    if (!r.customerMessageAt) continue;
+    const key = r.customerMessageAt.toISOString().slice(0, 10);
     if (!grouped[key]) continue;
-    if (v.conversationType === "INBOX") grouped[key].inbox++;
-    else if (v.conversationType === "COMMENT") grouped[key].comment++;
+    if (r.isLateReply) grouped[key].late++;
+    else grouped[key].onTime++;
   }
 
   return Object.entries(grouped)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, val]) => {
       const [, mm, dd] = date.split("-");
-      return { date: `${dd}/${mm}`, inbox: val.inbox, comment: val.comment };
+      return { date: `${dd}/${mm}`, late: val.late, onTime: val.onTime };
+    });
+}
+
+// ----------------------------------------------------------------
+// Response Time Trend
+// ----------------------------------------------------------------
+
+export interface ResponseTimeTrendDay {
+  date: string; // "DD/MM"
+  inbox: number | null;
+  comment: number | null;
+}
+
+export async function getResponseTimeTrend(
+  days = 30,
+  pageId?: string
+): Promise<ResponseTimeTrendDay[]> {
+  const wherePage = pageId ? { pageId } : {};
+
+  const since = new Date();
+  since.setDate(since.getDate() - (days - 1));
+  since.setHours(0, 0, 0, 0);
+
+  const records = await prisma.sLAViolation.findMany({
+    where: {
+      ...wherePage,
+      responseTimeMinutes: { not: null },
+      customerMessageAt: { gte: since },
+    },
+    select: { customerMessageAt: true, conversationType: true, responseTimeMinutes: true },
+  });
+
+  const grouped: Record<string, { inboxSum: number; inboxCount: number; commentSum: number; commentCount: number }> = {};
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    grouped[key] = { inboxSum: 0, inboxCount: 0, commentSum: 0, commentCount: 0 };
+  }
+
+  for (const r of records) {
+    if (!r.customerMessageAt || r.responseTimeMinutes === null) continue;
+    const key = r.customerMessageAt.toISOString().slice(0, 10);
+    if (!grouped[key]) continue;
+    if (r.conversationType === "INBOX") {
+      grouped[key].inboxSum += r.responseTimeMinutes;
+      grouped[key].inboxCount++;
+    } else if (r.conversationType === "COMMENT") {
+      grouped[key].commentSum += r.responseTimeMinutes;
+      grouped[key].commentCount++;
+    }
+  }
+
+  return Object.entries(grouped)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, val]) => {
+      const [, mm, dd] = date.split("-");
+      return {
+        date: `${dd}/${mm}`,
+        inbox: val.inboxCount > 0 ? Math.round(val.inboxSum / val.inboxCount) : null,
+        comment: val.commentCount > 0 ? Math.round(val.commentSum / val.commentCount) : null,
+      };
     });
 }

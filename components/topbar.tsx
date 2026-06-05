@@ -26,7 +26,7 @@ export default function Topbar({ userName, userEmail, userAvatarUrl }: TopbarPro
   return (
     <header className="h-14 border-b border-zinc-200 bg-white px-6 flex items-center justify-between shrink-0">
       {/* Left — App name */}
-      <span className="text-sm font-semibold text-zinc-800 tracking-tight">
+      <span className="text-base font-semibold text-zinc-800 tracking-tight">
         {t.common.appName}
       </span>
 
@@ -54,6 +54,16 @@ export default function Topbar({ userName, userEmail, userAvatarUrl }: TopbarPro
           >
             EN
           </button>
+          <button
+            onClick={() => setLocale("zh")}
+            className={`px-2.5 py-1 rounded transition-colors ${
+              locale === "zh"
+                ? "bg-zinc-900 text-white"
+                : "text-zinc-500 hover:text-zinc-800"
+            }`}
+          >
+            ZH
+          </button>
         </div>
 
         {/* Avatar + dropdown */}
@@ -70,7 +80,7 @@ export default function Topbar({ userName, userEmail, userAvatarUrl }: TopbarPro
                 {getInitials(userName)}
               </div>
             )}
-            <span className="text-sm text-zinc-700 font-medium hidden sm:block">
+            <span className="text-base text-zinc-700 font-medium hidden sm:block">
               {userName}
             </span>
           </button>
@@ -84,7 +94,7 @@ export default function Topbar({ userName, userEmail, userAvatarUrl }: TopbarPro
             <div className="p-1.5">
               <button
                 onClick={() => signOut({ redirectTo: "/login" })}
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-red-600 hover:bg-red-50 transition-colors"
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-base text-red-600 hover:bg-red-50 transition-colors"
               >
                 <LogOut className="w-4 h-4" />
                 {t.common.signOut}
