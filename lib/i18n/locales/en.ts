@@ -148,7 +148,7 @@ const en = {
       thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun",
     },
   },
-} as const;
+};
 
 export default en;
 export type Messages = typeof en;
