@@ -241,7 +241,7 @@ async function syncSinglePage(
   }
 
   // --- STEP 4: Loop conversations — xử lý song song theo batch ---
-  const CONCURRENCY = 5;
+  const CONCURRENCY = 2;
   for (let i = 0; i < conversations.length; i += CONCURRENCY) {
     const batch = conversations.slice(i, i + CONCURRENCY);
     await Promise.allSettled(
