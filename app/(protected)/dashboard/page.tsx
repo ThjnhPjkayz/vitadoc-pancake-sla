@@ -246,7 +246,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button onClick={() => handleSync(false)} disabled={syncing} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+          <Button onClick={() => handleSync(false)} disabled={syncing}>
             {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />}
             {syncing ? t.dashboard.syncing : t.dashboard.sync}
           </Button>

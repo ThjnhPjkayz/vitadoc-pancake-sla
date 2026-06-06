@@ -3,6 +3,7 @@
 import { signOut } from "next-auth/react";
 import { LogOut } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { Button } from "@/components/ui/button";
 
 interface TopbarProps {
   userName: string;
@@ -33,37 +34,18 @@ export default function Topbar({ userName, userEmail, userAvatarUrl }: TopbarPro
       {/* Right — Language + Avatar */}
       <div className="flex items-center gap-3">
         {/* Language toggle */}
-        <div className="flex items-center gap-0.5 rounded-md border border-zinc-200 p-0.5 text-xs font-medium">
-          <button
-            onClick={() => setLocale("vi")}
-            className={`px-2.5 py-1 rounded transition-colors ${
-              locale === "vi"
-                ? "bg-zinc-900 text-white"
-                : "text-zinc-500 hover:text-zinc-800"
-            }`}
-          >
-            VI
-          </button>
-          <button
-            onClick={() => setLocale("en")}
-            className={`px-2.5 py-1 rounded transition-colors ${
-              locale === "en"
-                ? "bg-zinc-900 text-white"
-                : "text-zinc-500 hover:text-zinc-800"
-            }`}
-          >
-            EN
-          </button>
-          <button
-            onClick={() => setLocale("zh")}
-            className={`px-2.5 py-1 rounded transition-colors ${
-              locale === "zh"
-                ? "bg-zinc-900 text-white"
-                : "text-zinc-500 hover:text-zinc-800"
-            }`}
-          >
-            ZH
-          </button>
+        <div className="flex items-center gap-0.5 rounded-md border border-zinc-200 p-0.5">
+          {(["vi", "en", "zh"] as const).map((lang) => (
+            <Button
+              key={lang}
+              size="xs"
+              variant={locale === lang ? "default" : "ghost"}
+              onClick={() => setLocale(lang)}
+              className={locale === lang ? "" : "text-zinc-500 hover:text-zinc-800"}
+            >
+              {lang.toUpperCase()}
+            </Button>
+          ))}
         </div>
 
         {/* Avatar + dropdown */}

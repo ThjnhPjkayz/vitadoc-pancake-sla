@@ -16,6 +16,9 @@ import type { ViolationsTrendDay } from "@/lib/services/dashboard";
 
 export type ChartPeriod = 7 | 14 | 30;
 
+const COLOR_ON_TIME = "#10b981"; // --chart-2 (emerald-500)
+const COLOR_LATE    = "#ef4444"; // --chart-3 (red-500)
+
 interface ViolationsTrendChartProps {
   data: ViolationsTrendDay[];
   loading?: boolean;
@@ -126,14 +129,14 @@ export default function ViolationsTrendChart({
                 dataKey="onTime"
                 name={t.dashboard.chartOnTime}
                 stackId="a"
-                fill="#10b981"
+                fill={COLOR_ON_TIME}
                 radius={[0, 0, 0, 0]}
               />
               <Bar
                 dataKey="late"
                 name={t.dashboard.chartLate}
                 stackId="a"
-                fill="#ef4444"
+                fill={COLOR_LATE}
                 radius={[4, 4, 0, 0]}
               />
             </BarChart>

@@ -74,11 +74,11 @@ function TimeInput({
   onChange: (v: number) => void;
 }) {
   return (
-    <input
+    <Input
       type="time"
       value={hourToTime(value)}
       onChange={(e) => onChange(timeToHour(e.target.value))}
-      className="h-9 rounded-lg border border-input bg-white px-3 text-base text-zinc-900 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition [color-scheme:light]"
+      className="w-[120px] [color-scheme:light]"
     />
   );
 }
@@ -290,7 +290,7 @@ export default function ConfigPage() {
 
       {/* Save */}
       <div className="flex items-center gap-3">
-        <Button onClick={handleSave} disabled={saving} className="bg-blue-600 hover:bg-blue-700 text-white">
+        <Button onClick={handleSave} disabled={saving}>
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           {saving ? t.config.saving : t.config.save}
         </Button>

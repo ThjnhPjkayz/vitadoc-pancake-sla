@@ -210,11 +210,11 @@ export default function FiltersBar({
       <FilterField label={t.filters.from}>
         <div className="relative">
           <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-          <input
+          <Input
             type="date"
             value={filters.dateFrom}
             onChange={(e) => update("dateFrom", e.target.value)}
-            className="h-8 pl-8 pr-2.5 text-base rounded-lg border border-input bg-transparent text-foreground transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 [color-scheme:light]"
+            className="pl-8 [color-scheme:light]"
           />
         </div>
       </FilterField>
@@ -223,11 +223,11 @@ export default function FiltersBar({
       <FilterField label={t.filters.to}>
         <div className="relative">
           <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-          <input
+          <Input
             type="date"
             value={filters.dateTo}
             onChange={(e) => update("dateTo", e.target.value)}
-            className="h-8 pl-8 pr-2.5 text-base rounded-lg border border-input bg-transparent text-foreground transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 [color-scheme:light]"
+            className="pl-8 [color-scheme:light]"
           />
         </div>
       </FilterField>

@@ -15,6 +15,9 @@ import { useI18n } from "@/lib/i18n";
 import type { ResponseTimeTrendDay } from "@/lib/services/dashboard";
 import type { ChartPeriod } from "./violations-trend-chart";
 
+const COLOR_INBOX   = "#3b82f6"; // --chart-1 (blue-500)
+const COLOR_COMMENT = "#f97316"; // --chart-4 (orange-500)
+
 interface ResponseTimeTrendChartProps {
   data: ResponseTimeTrendDay[];
   loading?: boolean;
@@ -72,12 +75,12 @@ export default function ResponseTimeTrendChart({
             <AreaChart data={data}>
               <defs>
                 <linearGradient id="gradInbox" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                  <stop offset="5%" stopColor={COLOR_INBOX} stopOpacity={0.2} />
+                  <stop offset="95%" stopColor={COLOR_INBOX} stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="gradComment" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#f97316" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
+                  <stop offset="5%" stopColor={COLOR_COMMENT} stopOpacity={0.15} />
+                  <stop offset="95%" stopColor={COLOR_COMMENT} stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
@@ -106,7 +109,7 @@ export default function ResponseTimeTrendChart({
                 type="monotone"
                 dataKey="inbox"
                 name={t.dashboard.chartInbox}
-                stroke="#3b82f6"
+                stroke={COLOR_INBOX}
                 strokeWidth={2}
                 fill="url(#gradInbox)"
                 dot={false}
@@ -117,7 +120,7 @@ export default function ResponseTimeTrendChart({
                 type="monotone"
                 dataKey="comment"
                 name={t.dashboard.chartComment}
-                stroke="#f97316"
+                stroke={COLOR_COMMENT}
                 strokeWidth={2}
                 fill="url(#gradComment)"
                 dot={false}

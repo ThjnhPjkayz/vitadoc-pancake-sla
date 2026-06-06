@@ -25,9 +25,9 @@ function StatCards({ stats, loading }: { stats: TypeStats | null; loading: boole
 
   if (loading) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="h-20 rounded-xl bg-zinc-100 animate-pulse" />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-24 rounded-xl bg-zinc-100 animate-pulse" />
         ))}
       </div>
     );
@@ -41,47 +41,62 @@ function StatCards({ stats, loading }: { stats: TypeStats | null; loading: boole
       label: t.conversations.statTotal,
       value: total.toLocaleString("en-US"),
       icon: MessageSquare,
-      color: "text-blue-600",
-      bg: "bg-blue-50",
-      border: "border-blue-100",
+      iconColor: "text-blue-600",
+      iconBg: "bg-blue-50",
+      accent: "#2563eb",
+      isRatio: false,
     },
     {
       label: t.conversations.statPending,
       value: pending.toLocaleString("en-US"),
       icon: Clock,
-      color: "text-amber-600",
-      bg: "bg-amber-50",
-      border: "border-amber-100",
+      iconColor: "text-amber-600",
+      iconBg: "bg-amber-50",
+      accent: "#d97706",
+      isRatio: false,
     },
     {
       label: t.conversations.lateWorkingHours,
       value: `${(stats?.lateWorkingHours ?? 0).toLocaleString("en-US")} / ${(stats?.totalWorkingHours ?? 0).toLocaleString("en-US")}`,
       icon: Sun,
-      color: "text-orange-600",
-      bg: "bg-orange-50",
-      border: "border-orange-100",
+      iconColor: "text-orange-600",
+      iconBg: "bg-orange-50",
+      accent: "#ea580c",
+      isRatio: true,
     },
     {
       label: t.conversations.lateAfterHours,
       value: `${(stats?.lateAfterHours ?? 0).toLocaleString("en-US")} / ${(stats?.totalAfterHours ?? 0).toLocaleString("en-US")}`,
       icon: Moon,
-      color: "text-indigo-600",
-      bg: "bg-indigo-50",
-      border: "border-indigo-100",
+      iconColor: "text-indigo-600",
+      iconBg: "bg-indigo-50",
+      accent: "#4f46e5",
+      isRatio: true,
     },
   ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-      {cards.map(({ label, value, icon: Icon, color, bg, border }) => (
-        <div key={label} className={`rounded-xl border ${border} ${bg} px-4 py-3 flex items-center gap-3`}>
-          <div className={`p-2 rounded-lg bg-white/60 shrink-0 ${color}`}>
-            <Icon className="w-4 h-4" />
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {cards.map(({ label, value, icon: Icon, iconColor, iconBg, accent, isRatio }) => (
+        <div
+          key={label}
+          className="relative bg-card rounded-xl ring-1 ring-foreground/10 px-5 py-4 hover:shadow-md transition-all overflow-hidden"
+        >
+          <span
+            className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl"
+            style={{ background: accent }}
+          />
+          <div className="flex items-start justify-between gap-2 mb-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground leading-tight">
+              {label}
+            </p>
+            <div className={`shrink-0 p-1.5 rounded-md ${iconBg}`}>
+              <Icon className={`w-3.5 h-3.5 ${iconColor}`} />
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="text-xs text-zinc-500 font-medium truncate">{label}</p>
-            <p className={`text-xl font-bold ${color}`}>{value}</p>
-          </div>
+          <p className={`font-bold tracking-tight tabular-nums leading-none ${isRatio ? "text-xl" : "text-3xl"}`}>
+            {value}
+          </p>
         </div>
       ))}
     </div>
