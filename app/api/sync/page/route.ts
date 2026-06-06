@@ -18,10 +18,11 @@ export async function POST(request: Request) {
     since: string | null;
     conversations: number;
     messages: number;
+    slaChecked: number;
     cursor?: string | null;
   };
 
-  const { syncId, pageIndex, totalPages, page, since, conversations = 0, messages = 0, cursor } = body;
+  const { syncId, pageIndex, totalPages, page, since, conversations = 0, messages = 0, slaChecked = 0, cursor } = body;
 
   const record = await prisma.syncHistory.findUnique({
     where: { id: syncId },
@@ -44,6 +45,7 @@ export async function POST(request: Request) {
         totalPages,
         conversations,
         messages,
+        slaChecked,
       },
     },
   });

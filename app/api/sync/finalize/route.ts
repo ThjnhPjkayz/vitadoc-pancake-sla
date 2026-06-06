@@ -17,7 +17,10 @@ export async function POST(request: Request) {
 
   const { syncId, pagesCount, conversationsCount, messagesCount, slaChecked, errors, cancelled } = body;
 
-  const status = cancelled ? "cancelled" : (errors?.length ?? 0) > 0 ? "failed" : "success";
+  // Chỉ mark "failed" nếu không có conversation nào được sync thành công
+  // Lỗi nhỏ (vài conversation/message lỗi) vẫn tính là "success" để incremental sync hoạt động đúng
+  const hasAnyData = (conversationsCount ?? 0) > 0 || (messagesCount ?? 0) > 0;
+  const status = cancelled ? "cancelled" : (!hasAnyData && (errors?.length ?? 0) > 0) ? "failed" : "success";
 
   try {
     await prisma.syncHistory.update({

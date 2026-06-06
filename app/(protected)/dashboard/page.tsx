@@ -45,6 +45,8 @@ export default function DashboardPage() {
     slaChecked: number;
   } | null>(null);
   const syncCancelledRef = useRef(false);
+  // true khi sync được detect từ DB (cron/tab khác), không phải do client này khởi tạo
+  const isExternalSyncRef = useRef(false);
 
   const fetchStats = useCallback(async () => {
     setStatsLoading(true);
@@ -107,6 +109,7 @@ export default function DashboardPage() {
 
   const handleSync = useCallback(async (force = false) => {
     if (syncing) return;
+    setSyncing(true);
     setSyncResult(null);
     setSyncProgress(null);
     syncCancelledRef.current = false;
@@ -120,6 +123,7 @@ export default function DashboardPage() {
       const initRes = await fetch(url, { method: "POST" });
       const initJson = await initRes.json();
       if (!initJson.success) {
+        setSyncing(false);
         setSyncResult({ type: "error", message: initJson.error ?? t.dashboard.syncFailed });
         return;
       }
@@ -128,7 +132,6 @@ export default function DashboardPage() {
       const pages = initJson.pages as { id: string; name: string; [key: string]: unknown }[];
       const since = initJson.since as string | null;
 
-      setSyncing(true);
       setSyncProgress({ currentPageName: null, currentPageIndex: 0, totalPages: pages.length, conversations: 0, messages: 0, slaChecked: 0 });
 
       // Step 2: Sync one page at a time, cursor-paginating conversations
@@ -147,7 +150,7 @@ export default function DashboardPage() {
           const pageRes: Response = await fetch("/api/sync/page", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ syncId, pageIndex: i + 1, totalPages: pages.length, page, since, conversations: totals.conversations, messages: totals.messages, cursor }),
+            body: JSON.stringify({ syncId, pageIndex: i + 1, totalPages: pages.length, page, since, conversations: totals.conversations, messages: totals.messages, slaChecked: totals.slaChecked, cursor }),
           });
           const pageJson: { success: boolean; cancelled?: boolean; stats?: { pages: { upserted: number }; conversations: { upserted: number }; messages: { upserted: number }; slaChecked: number; errors: string[] }; nextCursor?: string | null } = await pageRes.json();
 
@@ -202,6 +205,14 @@ export default function DashboardPage() {
     await fetch("/api/sync", { method: "DELETE" });
   }, []);
 
+  const handleResetSync = useCallback(async () => {
+    await fetch("/api/sync", { method: "DELETE" });
+    isExternalSyncRef.current = false;
+    setSyncing(false);
+    setSyncProgress(null);
+    setSyncResult(null);
+  }, []);
+
   useEffect(() => {
     if (!syncResult) return;
     const timer = setTimeout(() => setSyncResult(null), 6000);
@@ -212,9 +223,30 @@ export default function DashboardPage() {
     fetchStats();
     fetchTrend(chartPeriod);
     checkSyncStatus().then((status) => {
-      if (status === "running") setSyncing(true);
+      if (status === "running") {
+        isExternalSyncRef.current = true;
+        setSyncing(true);
+      }
     });
   }, []);
+
+  // Polling khi sync đang chạy từ nguồn ngoài (cron/tab khác)
+  useEffect(() => {
+    if (!syncing || !isExternalSyncRef.current) return;
+    const interval = setInterval(async () => {
+      const status = await checkSyncStatus();
+      if (status !== "running") {
+        isExternalSyncRef.current = false;
+        setSyncing(false);
+        setSyncProgress(null);
+        if (status === "success") {
+          fetchStats();
+          fetchTrend(chartPeriod);
+        }
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [syncing, checkSyncStatus, fetchStats, fetchTrend, chartPeriod]);
 
   useEffect(() => {
     fetchTrend(chartPeriod);
@@ -251,10 +283,17 @@ export default function DashboardPage() {
             {syncing ? t.dashboard.syncing : t.dashboard.sync}
           </Button>
           {syncing ? (
-            <Button variant="outline" onClick={handleStopSync} className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700">
-              <XCircle className="w-4 h-4" />
-              {t.common.stop}
-            </Button>
+            isExternalSyncRef.current ? (
+              <Button variant="outline" onClick={handleResetSync} className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700">
+                <XCircle className="w-4 h-4" />
+                Reset
+              </Button>
+            ) : (
+              <Button variant="outline" onClick={handleStopSync} className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700">
+                <XCircle className="w-4 h-4" />
+                {t.common.stop}
+              </Button>
+            )
           ) : (
             <Button variant="outline" onClick={() => handleSync(true)}>
               <CloudDownload className="w-4 h-4" />

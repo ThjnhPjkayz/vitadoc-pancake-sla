@@ -15,8 +15,8 @@ export async function POST(request: Request) {
     return Response.json({ success: false, error: "Sync bị tắt trên môi trường local" }, { status: 403 });
   }
 
-  // Kiểm tra có sync nào đang chạy không (bỏ qua nếu stale > 30 phút)
-  const STALE_THRESHOLD_MS = 30 * 60 * 1000;
+  // Kiểm tra có sync nào đang chạy không (bỏ qua nếu stale > 10 phút)
+  const STALE_THRESHOLD_MS = 10 * 60 * 1000;
   const existingRunning = await prisma.syncHistory.findFirst({
     where: { status: "running" },
     select: { id: true, startedAt: true },
