@@ -154,7 +154,10 @@ export async function getAllConversations(
     if (batch.length < CONVERSATIONS_PAGE_SIZE) break;
 
     // Cursor: ID của conversation cuối cùng trong batch
-    beforeId = batch[batch.length - 1].id;
+    const lastId = batch[batch.length - 1].id;
+    // Nếu cursor không advance → API không hỗ trợ pagination cho page này
+    if (lastId === beforeId) break;
+    beforeId = lastId;
 
     // Rate limit safety
     await new Promise((r) => setTimeout(r, 300));

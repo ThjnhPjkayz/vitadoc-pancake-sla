@@ -265,10 +265,11 @@ export async function syncConversationBatch(
     );
   }
 
+  const lastId = conversations[conversations.length - 1].id;
   const nextCursor =
-    conversations.length < CONVERSATIONS_PAGE_SIZE
+    conversations.length < CONVERSATIONS_PAGE_SIZE || lastId === cursor
       ? null
-      : conversations[conversations.length - 1].id;
+      : lastId;
 
   return { nextCursor };
 }
