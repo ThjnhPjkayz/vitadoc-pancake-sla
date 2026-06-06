@@ -1,7 +1,8 @@
-// POST /api/sync/page — Syncs one page. Called once per page by the client loop.
+// POST /api/sync/page — Syncs one conversation batch for a page.
+// Called repeatedly by the client with cursor until nextCursor === null.
 
 import { prisma } from "@/lib/prisma";
-import { syncSinglePage } from "@/lib/services/sync";
+import { ensurePageAndGetToken, syncConversationBatch } from "@/lib/services/sync";
 import type { SyncStats } from "@/lib/services/sync";
 import type { PancakePage } from "@/lib/types/pancake";
 
@@ -17,11 +18,11 @@ export async function POST(request: Request) {
     since: string | null;
     conversations: number;
     messages: number;
+    cursor?: string | null;
   };
 
-  const { syncId, pageIndex, totalPages, page, since, conversations = 0, messages = 0 } = body;
+  const { syncId, pageIndex, totalPages, page, since, conversations = 0, messages = 0, cursor } = body;
 
-  // Check for cancellation before doing any work
   const record = await prisma.syncHistory.findUnique({
     where: { id: syncId },
     select: { status: true },
@@ -33,7 +34,6 @@ export async function POST(request: Request) {
     return Response.json({ success: false, cancelled: true });
   }
 
-  // Update progress so UI polling (page refresh case) can see current page
   await prisma.syncHistory.update({
     where: { id: syncId },
     data: {
@@ -58,10 +58,34 @@ export async function POST(request: Request) {
 
   try {
     const sinceDate = since ? new Date(since) : undefined;
-    await syncSinglePage(page, stats, sinceDate);
+
+    // First call (no cursor): upsert page + get token
+    // Subsequent calls: read stored token from DB
+    let pageAccessToken: string;
+    if (!cursor) {
+      pageAccessToken = await ensurePageAndGetToken(page, stats);
+    } else {
+      const dbPage = await prisma.page.findUnique({
+        where: { id: page.id },
+        select: { pageAccessToken: true },
+      });
+      if (!dbPage?.pageAccessToken) {
+        throw new Error(`No stored token for page ${page.id}`);
+      }
+      pageAccessToken = dbPage.pageAccessToken;
+    }
+
+    const { nextCursor } = await syncConversationBatch(
+      page.id,
+      pageAccessToken,
+      stats,
+      cursor ?? undefined,
+      sinceDate
+    );
+
+    return Response.json({ success: true, stats, nextCursor });
   } catch (err) {
     stats.errors.push(`Page ${page.id} (${page.name}): ${String(err)}`);
+    return Response.json({ success: true, stats, nextCursor: null });
   }
-
-  return Response.json({ success: true, stats });
 }

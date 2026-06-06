@@ -129,7 +129,7 @@ export default function DashboardPage() {
       setSyncing(true);
       setSyncProgress({ currentPageName: null, currentPageIndex: 0, totalPages: pages.length, conversations: 0, messages: 0 });
 
-      // Step 2: Sync one page at a time
+      // Step 2: Sync one page at a time, cursor-paginating conversations
       let cancelled = false;
       for (let i = 0; i < pages.length; i++) {
         if (syncCancelledRef.current) { cancelled = true; break; }
@@ -137,22 +137,32 @@ export default function DashboardPage() {
         const page = pages[i];
         setSyncProgress({ currentPageName: page.name, currentPageIndex: i + 1, totalPages: pages.length, conversations: totals.conversations, messages: totals.messages });
 
-        const pageRes = await fetch("/api/sync/page", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ syncId, pageIndex: i + 1, totalPages: pages.length, page, since, conversations: totals.conversations, messages: totals.messages }),
-        });
-        const pageJson = await pageRes.json();
+        // Loop cursor pages for this page until no more conversations
+        let cursor: string | null = null;
+        do {
+          if (syncCancelledRef.current) { cancelled = true; break; }
 
-        if (pageJson.cancelled) { cancelled = true; break; }
-        if (pageJson.success && pageJson.stats) {
-          totals.pages += pageJson.stats.pages.upserted;
-          totals.conversations += pageJson.stats.conversations.upserted;
-          totals.messages += pageJson.stats.messages.upserted;
-          totals.slaChecked += pageJson.stats.slaChecked;
-          totals.errors.push(...(pageJson.stats.errors ?? []));
-          setSyncProgress({ currentPageName: page.name, currentPageIndex: i + 1, totalPages: pages.length, conversations: totals.conversations, messages: totals.messages });
-        }
+          const pageRes: Response = await fetch("/api/sync/page", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ syncId, pageIndex: i + 1, totalPages: pages.length, page, since, conversations: totals.conversations, messages: totals.messages, cursor }),
+          });
+          const pageJson: { success: boolean; cancelled?: boolean; stats?: { pages: { upserted: number }; conversations: { upserted: number }; messages: { upserted: number }; slaChecked: number; errors: string[] }; nextCursor?: string | null } = await pageRes.json();
+
+          if (pageJson.cancelled) { cancelled = true; break; }
+          if (pageJson.success && pageJson.stats) {
+            totals.pages += pageJson.stats.pages.upserted ?? 0;
+            totals.conversations += pageJson.stats.conversations.upserted ?? 0;
+            totals.messages += pageJson.stats.messages.upserted ?? 0;
+            totals.slaChecked += pageJson.stats.slaChecked ?? 0;
+            totals.errors.push(...(pageJson.stats.errors ?? []));
+            setSyncProgress({ currentPageName: page.name, currentPageIndex: i + 1, totalPages: pages.length, conversations: totals.conversations, messages: totals.messages });
+          }
+
+          cursor = pageJson.nextCursor ?? null;
+        } while (cursor && !syncCancelledRef.current);
+
+        if (cancelled) break;
       }
 
       // Step 3: Finalize

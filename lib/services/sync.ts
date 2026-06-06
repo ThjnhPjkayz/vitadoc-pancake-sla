@@ -9,8 +9,10 @@ import type { Prisma } from "@/app/generated/prisma";
 import {
   getPages,
   generatePageAccessToken,
+  getConversations,
   getAllConversations,
   getMessages,
+  CONVERSATIONS_PAGE_SIZE,
 } from "@/lib/services/pancake-api";
 import { calculateSLAForConversation } from "@/lib/services/sla";
 import {
@@ -167,15 +169,13 @@ export async function syncAllPages(force = false): Promise<SyncStats> {
 }
 
 // ----------------------------------------------------------------
-// Sync Single Page
+// Ensure Page Setup — upsert page + get token (idempotent)
 // ----------------------------------------------------------------
 
-export async function syncSinglePage(
+export async function ensurePageAndGetToken(
   page: PancakePage,
-  stats: SyncStats,
-  since?: Date
-): Promise<void> {
-  // --- Save page to DB ---
+  stats: SyncStats
+): Promise<string> {
   await prisma.page.upsert({
     where: { id: page.id },
     update: {
@@ -204,56 +204,92 @@ export async function syncSinglePage(
   });
   stats.pages.upserted++;
 
-  // --- Generate page access token ---
-  let pageAccessToken: string | null = null;
   try {
     const tokenRes = await generatePageAccessToken(page.id);
-    pageAccessToken = tokenRes.page_access_token;
-
-    await prisma.page.update({
-      where: { id: page.id },
-      data: { pageAccessToken },
-    });
+    const token = tokenRes.page_access_token;
+    await prisma.page.update({ where: { id: page.id }, data: { pageAccessToken: token } });
+    return token;
   } catch {
-    const existingToken =
-      (page.settings as Record<string, unknown>)
-        ?.page_access_token as string | undefined;
+    const dbPage = await prisma.page.findUnique({
+      where: { id: page.id },
+      select: { pageAccessToken: true },
+    });
+    if (dbPage?.pageAccessToken) return dbPage.pageAccessToken;
 
-    if (existingToken) {
-      pageAccessToken = existingToken;
-    } else {
-      throw new Error(`No page_access_token available for ${page.id}`);
-    }
+    const existingToken = (page.settings as Record<string, unknown>)
+      ?.page_access_token as string | undefined;
+    if (existingToken) return existingToken;
+
+    throw new Error(`No page_access_token available for ${page.id}`);
   }
+}
 
-  if (!pageAccessToken) {
-    throw new Error(`Cannot get page_access_token for ${page.id}`);
-  }
+// ----------------------------------------------------------------
+// Sync One Conversation Batch — one cursor page (≤60 conversations)
+// Returns nextCursor = null when there are no more pages
+// ----------------------------------------------------------------
 
-  // --- STEP 3: Fetch conversations (incremental nếu có since) ---
-  let conversations: PancakeConversation[] = [];
-  try {
-    conversations = await getAllConversations(page.id, pageAccessToken, since);
-    console.log(
-      `[Sync]   📨 Page "${page.name}": ${conversations.length} conversations${since ? " (incremental)" : ""}`
+export async function syncConversationBatch(
+  pageId: string,
+  pageAccessToken: string,
+  stats: SyncStats,
+  cursor?: string,
+  since?: Date
+): Promise<{ nextCursor: string | null }> {
+  const res = await getConversations(pageId, pageAccessToken, cursor);
+  const conversations: PancakeConversation[] = res.conversations ?? [];
+
+  if (conversations.length === 0) return { nextCursor: null };
+
+  // Incremental: stop if entire batch is older than since
+  if (since) {
+    const hasNew = conversations.some(
+      (c) => !c.updated_at || new Date(c.updated_at + "+07:00") >= since
     );
-  } catch (err) {
-    stats.errors.push(`Conversations ${page.id}: ${String(err)}`);
-    return;
+    if (!hasNew) return { nextCursor: null };
   }
 
-  // --- STEP 4: Loop conversations — xử lý song song theo batch ---
+  console.log(
+    `[Sync]   📨 Page ${pageId}: ${conversations.length} conversations (cursor=${cursor ?? "start"})${since ? " incremental" : ""}`
+  );
+
   const CONCURRENCY = 2;
   for (let i = 0; i < conversations.length; i += CONCURRENCY) {
     const batch = conversations.slice(i, i + CONCURRENCY);
     await Promise.allSettled(
       batch.map((conv) =>
-        syncSingleConversation(page.id, pageAccessToken, conv, stats).catch(
+        syncSingleConversation(pageId, pageAccessToken!, conv, stats).catch(
           (err) => stats.errors.push(`Conv ${conv.id}: ${String(err)}`)
         )
       )
     );
   }
+
+  const nextCursor =
+    conversations.length < CONVERSATIONS_PAGE_SIZE
+      ? null
+      : conversations[conversations.length - 1].id;
+
+  return { nextCursor };
+}
+
+// ----------------------------------------------------------------
+// Sync Single Page — used by cron job (loops all cursor pages)
+// ----------------------------------------------------------------
+
+export async function syncSinglePage(
+  page: PancakePage,
+  stats: SyncStats,
+  since?: Date
+): Promise<void> {
+  const pageAccessToken = await ensurePageAndGetToken(page, stats);
+
+  let cursor: string | undefined;
+  do {
+    const { nextCursor } = await syncConversationBatch(page.id, pageAccessToken, stats, cursor, since);
+    cursor = nextCursor ?? undefined;
+    if (cursor) await new Promise((r) => setTimeout(r, 300));
+  } while (cursor);
 }
 
 // ----------------------------------------------------------------

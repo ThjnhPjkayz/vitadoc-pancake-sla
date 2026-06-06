@@ -101,7 +101,7 @@ export async function generatePageAccessToken(
 // 3️⃣ Get Conversations — Lấy danh sách hội thoại (1 page)
 // ----------------------------------------------------------------
 
-const CONVERSATIONS_PAGE_SIZE = 60;
+export const CONVERSATIONS_PAGE_SIZE = 60;
 
 export async function getConversations(
   pageId: string,

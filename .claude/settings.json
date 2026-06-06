@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -File .claude\\hooks\\stop-check.ps1",
+            "shell": "powershell",
+            "timeout": 60,
+            "statusMessage": "Đang kiểm tra TypeScript...",
+            "asyncRewake": true
+          }
+        ]
+      }
+    ]
+  }
+}
