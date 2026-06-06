@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Topbar from "@/components/topbar";
 import Sidebar from "@/components/sidebar";
@@ -9,7 +10,8 @@ export default async function ProtectedLayout({
   children: React.ReactNode;
 }) {
   const session = await auth();
-  const user = session?.user;
+  if (!session?.user) redirect("/login");
+  const user = session.user;
 
   return (
     <TooltipProvider>
