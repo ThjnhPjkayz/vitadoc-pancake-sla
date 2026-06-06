@@ -15,9 +15,11 @@ export async function POST(request: Request) {
     totalPages: number;
     page: PancakePage;
     since: string | null;
+    conversations: number;
+    messages: number;
   };
 
-  const { syncId, pageIndex, totalPages, page, since } = body;
+  const { syncId, pageIndex, totalPages, page, since, conversations = 0, messages = 0 } = body;
 
   // Check for cancellation before doing any work
   const record = await prisma.syncHistory.findUnique({
@@ -40,6 +42,8 @@ export async function POST(request: Request) {
         currentPageIndex: pageIndex,
         currentPageName: page.name,
         totalPages,
+        conversations,
+        messages,
       },
     },
   });

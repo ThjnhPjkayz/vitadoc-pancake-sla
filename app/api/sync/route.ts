@@ -70,7 +70,7 @@ export async function POST(request: Request) {
   await prisma.syncHistory.update({
     where: { id: syncRecord.id },
     data: {
-      progressSnapshot: { isRunning: true, totalPages: pages.length, currentPageIndex: 0, currentPageName: null },
+      progressSnapshot: { isRunning: true, totalPages: pages.length, currentPageIndex: 0, currentPageName: null, conversations: 0, messages: 0 },
     },
   });
 

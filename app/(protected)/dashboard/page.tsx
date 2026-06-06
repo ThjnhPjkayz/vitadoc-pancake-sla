@@ -91,8 +91,8 @@ export default function DashboardPage() {
           currentPageName: json.progress.currentPageName,
           currentPageIndex: json.progress.currentPageIndex,
           totalPages: json.progress.totalPages,
-          conversations: json.progress.conversations,
-          messages: json.progress.messages,
+          conversations: json.progress.conversations ?? 0,
+          messages: json.progress.messages ?? 0,
         });
       } else {
         setSyncProgress(null);
@@ -140,7 +140,7 @@ export default function DashboardPage() {
         const pageRes = await fetch("/api/sync/page", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ syncId, pageIndex: i + 1, totalPages: pages.length, page, since }),
+          body: JSON.stringify({ syncId, pageIndex: i + 1, totalPages: pages.length, page, since, conversations: totals.conversations, messages: totals.messages }),
         });
         const pageJson = await pageRes.json();
 
