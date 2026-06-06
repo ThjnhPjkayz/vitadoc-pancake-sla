@@ -42,6 +42,7 @@ export default function DashboardPage() {
     totalPages: number;
     conversations: number;
     messages: number;
+    slaChecked: number;
   } | null>(null);
   const syncCancelledRef = useRef(false);
 
@@ -93,6 +94,7 @@ export default function DashboardPage() {
           totalPages: json.progress.totalPages,
           conversations: json.progress.conversations ?? 0,
           messages: json.progress.messages ?? 0,
+          slaChecked: json.progress.slaChecked ?? 0,
         });
       } else {
         setSyncProgress(null);
@@ -127,7 +129,7 @@ export default function DashboardPage() {
       const since = initJson.since as string | null;
 
       setSyncing(true);
-      setSyncProgress({ currentPageName: null, currentPageIndex: 0, totalPages: pages.length, conversations: 0, messages: 0 });
+      setSyncProgress({ currentPageName: null, currentPageIndex: 0, totalPages: pages.length, conversations: 0, messages: 0, slaChecked: 0 });
 
       // Step 2: Sync one page at a time, cursor-paginating conversations
       let cancelled = false;
@@ -135,7 +137,7 @@ export default function DashboardPage() {
         if (syncCancelledRef.current) { cancelled = true; break; }
 
         const page = pages[i];
-        setSyncProgress({ currentPageName: page.name, currentPageIndex: i + 1, totalPages: pages.length, conversations: totals.conversations, messages: totals.messages });
+        setSyncProgress({ currentPageName: page.name, currentPageIndex: i + 1, totalPages: pages.length, conversations: totals.conversations, messages: totals.messages, slaChecked: totals.slaChecked });
 
         // Loop cursor pages for this page until no more conversations
         let cursor: string | null = null;
@@ -156,7 +158,7 @@ export default function DashboardPage() {
             totals.messages += pageJson.stats.messages.upserted ?? 0;
             totals.slaChecked += pageJson.stats.slaChecked ?? 0;
             totals.errors.push(...(pageJson.stats.errors ?? []));
-            setSyncProgress({ currentPageName: page.name, currentPageIndex: i + 1, totalPages: pages.length, conversations: totals.conversations, messages: totals.messages });
+            setSyncProgress({ currentPageName: page.name, currentPageIndex: i + 1, totalPages: pages.length, conversations: totals.conversations, messages: totals.messages, slaChecked: totals.slaChecked });
           }
 
           cursor = pageJson.nextCursor ?? null;
@@ -287,10 +289,15 @@ export default function DashboardPage() {
                     {syncProgress.currentPageName
                       ? `📄 ${syncProgress.currentPageIndex}/${syncProgress.totalPages} — ${syncProgress.currentPageName}`
                       : `📄 ${syncProgress.currentPageIndex}/${syncProgress.totalPages} pages`}
-                    {" · "}
-                    {syncProgress.conversations.toLocaleString()} {t.conversations.conversations}
-                    {" · "}
-                    {syncProgress.messages.toLocaleString()} {t.conversations.messages}
+                    {syncProgress.conversations > 0 && (
+                      <> · {syncProgress.conversations.toLocaleString()} {t.conversations.conversations}</>
+                    )}
+                    {syncProgress.messages > 0 && (
+                      <> · {syncProgress.messages.toLocaleString()} {t.conversations.messages} mới</>
+                    )}
+                    {syncProgress.slaChecked > 0 && (
+                      <> · {syncProgress.slaChecked.toLocaleString()} SLA</>
+                    )}
                   </span>
                 )}
               </div>

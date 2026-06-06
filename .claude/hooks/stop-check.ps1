@@ -11,6 +11,12 @@ $result = & npx tsc --noEmit 2>&1
 $exitCode = $LASTEXITCODE
 
 if ($exitCode -eq 0) {
+    # Windows popup notification (auto-closes after 4s)
+    Start-Process -FilePath "powershell" -WindowStyle Hidden -ArgumentList @(
+        "-NonInteractive", "-NoProfile", "-Command",
+        "(New-Object -ComObject WScript.Shell).Popup('Task hoan thanh! TypeScript OK', 4, 'Claude Code', 64)"
+    )
+
     Add-Type -AssemblyName System.Media
     [System.Media.SystemSounds]::Asterisk.Play()
 

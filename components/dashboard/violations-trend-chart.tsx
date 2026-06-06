@@ -23,6 +23,42 @@ interface ViolationsTrendChartProps {
   onPeriodChange?: (p: ChartPeriod) => void;
 }
 
+function ChartTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ name: string; value: number; color: string }>;
+  label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+  const total = payload.reduce((s, p) => s + (p.value || 0), 0);
+  return (
+    <div className="rounded-lg border bg-white px-3 py-2.5 shadow-lg text-xs min-w-[130px]">
+      <p className="font-semibold text-zinc-700 mb-2">{label}</p>
+      {payload.map((entry) => (
+        <div key={entry.name} className="flex items-center justify-between gap-4 mb-1">
+          <div className="flex items-center gap-1.5">
+            <span
+              className="w-2 h-2 rounded-full shrink-0"
+              style={{ background: entry.color }}
+            />
+            <span className="text-muted-foreground">{entry.name}</span>
+          </div>
+          <span className="font-semibold tabular-nums">{entry.value}</span>
+        </div>
+      ))}
+      {payload.length > 1 && (
+        <div className="flex items-center justify-between gap-4 mt-1.5 pt-1.5 border-t border-zinc-100">
+          <span className="text-zinc-400">Total</span>
+          <span className="font-bold tabular-nums">{total}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ViolationsTrendChart({
   data,
   loading,
@@ -80,22 +116,26 @@ export default function ViolationsTrendChart({
                 tickLine={false}
                 width={28}
               />
-              <Tooltip
-                cursor={{ fill: "#f9fafb" }}
-                contentStyle={{
-                  fontSize: 12,
-                  border: "1px solid #e5e7eb",
-                  borderRadius: 8,
-                  boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-                }}
-              />
+              <Tooltip content={<ChartTooltip />} cursor={{ fill: "#f9fafb" }} />
               <Legend
                 iconType="circle"
                 iconSize={8}
                 wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
               />
-              <Bar dataKey="onTime" name={t.dashboard.chartOnTime} stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} />
-              <Bar dataKey="late" name={t.dashboard.chartLate} stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
+              <Bar
+                dataKey="onTime"
+                name={t.dashboard.chartOnTime}
+                stackId="a"
+                fill="#10b981"
+                radius={[0, 0, 0, 0]}
+              />
+              <Bar
+                dataKey="late"
+                name={t.dashboard.chartLate}
+                stackId="a"
+                fill="#ef4444"
+                radius={[4, 4, 0, 0]}
+              />
             </BarChart>
           </ResponsiveContainer>
         )}

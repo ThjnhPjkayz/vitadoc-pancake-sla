@@ -18,20 +18,23 @@ export default function Sidebar() {
   ];
 
   return (
-    <aside className="w-56 shrink-0 border-r border-zinc-200 bg-white flex flex-col py-4">
-      <nav className="flex flex-col gap-1 px-3">
+    <aside className="w-56 shrink-0 border-r border-zinc-200 bg-white flex flex-col py-3">
+      <nav className="flex flex-col gap-0.5 px-3">
         {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
           return (
             <Link
               key={href}
               href={href}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-base font-medium transition-colors ${
+              className={`relative flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                 active
-                  ? "bg-blue-50 text-blue-700 font-medium"
+                  ? "bg-blue-50 text-blue-700"
                   : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800"
               }`}
             >
+              {active && (
+                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-blue-600 rounded-r-full" />
+              )}
               <Icon className="w-4 h-4 shrink-0" />
               {label}
             </Link>

@@ -30,10 +30,13 @@ async function fetchWithRetry(
   options: RequestInit = {},
   retries = MAX_RETRIES
 ): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+  let lastErr: unknown;
 
   for (let attempt = 1; attempt <= retries; attempt++) {
+    // Tạo AbortController mới cho mỗi attempt để tránh dùng signal đã abort
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+
     try {
       const res = await fetch(url, {
         ...options,
@@ -50,15 +53,15 @@ async function fetchWithRetry(
       return res;
     } catch (err) {
       clearTimeout(timeout);
-      if (attempt === retries) throw err;
+      lastErr = err;
+      if (attempt === retries) break;
 
       console.warn(`[PancakeAPI] Attempt ${attempt}/${retries} failed, retrying...`);
-      // Exponential backoff
       await new Promise((r) => setTimeout(r, 1000 * attempt));
     }
   }
 
-  throw new Error("Unreachable");
+  throw lastErr;
 }
 
 // ----------------------------------------------------------------

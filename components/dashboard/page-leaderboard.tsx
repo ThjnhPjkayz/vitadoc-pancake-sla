@@ -35,6 +35,32 @@ interface PageLeaderboardProps {
   onPageClick?: (pageId: string) => void;
 }
 
+function RankBadge({ rank }: { rank: number }) {
+  if (rank === 1)
+    return (
+      <span className="inline-flex w-6 h-6 rounded-full bg-amber-100 text-amber-600 items-center justify-center text-xs font-bold ring-1 ring-amber-300/60">
+        1
+      </span>
+    );
+  if (rank === 2)
+    return (
+      <span className="inline-flex w-6 h-6 rounded-full bg-zinc-100 text-zinc-500 items-center justify-center text-xs font-bold ring-1 ring-zinc-300/60">
+        2
+      </span>
+    );
+  if (rank === 3)
+    return (
+      <span className="inline-flex w-6 h-6 rounded-full bg-orange-50 text-orange-500 items-center justify-center text-xs font-bold ring-1 ring-orange-200/60">
+        3
+      </span>
+    );
+  return (
+    <span className="text-sm text-muted-foreground font-medium w-6 text-center inline-block">
+      {rank}
+    </span>
+  );
+}
+
 function LateRateBar({ rate }: { rate: number }) {
   const pct = Math.round(rate * 100);
   const color =
@@ -146,8 +172,8 @@ export default function PageLeaderboard({
               className={onPageClick ? "cursor-pointer" : ""}
               onClick={() => onPageClick?.(page.pageId)}
             >
-              <TableCell className="text-base text-muted-foreground font-medium">
-                {idx + 1}
+              <TableCell>
+                <RankBadge rank={idx + 1} />
               </TableCell>
               <TableCell>
                 <div className="flex items-center gap-2">
