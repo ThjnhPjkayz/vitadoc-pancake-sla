@@ -148,9 +148,9 @@ export async function POST(request: Request) {
           break;
         }
 
-        const { nextCursor } = await syncConversationBatch(page.id, pageAccessToken, runStats, cursor, undefined);
+        const { nextCursor } = await syncConversationBatch(page.id, pageAccessToken, runStats, cursor, undefined, 1);
         cursor = nextCursor ?? undefined;
-        if (cursor) await new Promise((r) => setTimeout(r, 300));
+        if (cursor) await new Promise((r) => setTimeout(r, 800));
       } while (cursor && !timedOut);
 
     } catch (err) {
@@ -164,7 +164,7 @@ export async function POST(request: Request) {
     resume.currentPageId = null;
     resume.currentCursor = null;
 
-    await new Promise((r) => setTimeout(r, 500));
+    await new Promise((r) => setTimeout(r, 1000));
   }
 
   if (timedOut) {
