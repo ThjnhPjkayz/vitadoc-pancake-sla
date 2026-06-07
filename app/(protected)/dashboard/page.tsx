@@ -282,7 +282,13 @@ export default function DashboardPage() {
             {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />}
             {syncing ? t.dashboard.syncing : t.dashboard.sync}
           </Button>
-          {syncing ? (
+          {process.env.NODE_ENV !== "development" && (
+            <Button variant="outline" onClick={() => handleSync(true)} disabled={syncing}>
+              <CloudDownload className="w-4 h-4" />
+              {t.dashboard.fullSync}
+            </Button>
+          )}
+          {syncing && (
             isExternalSyncRef.current ? (
               <Button variant="outline" onClick={handleResetSync} className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700">
                 <XCircle className="w-4 h-4" />
@@ -294,11 +300,6 @@ export default function DashboardPage() {
                 {t.common.stop}
               </Button>
             )
-          ) : (
-            <Button variant="outline" onClick={() => handleSync(true)}>
-              <CloudDownload className="w-4 h-4" />
-              {t.dashboard.fullSync}
-            </Button>
           )}
           <Button variant="outline" onClick={() => { fetchStats(); fetchTrend(chartPeriod); }}>
             <RefreshCw className="w-4 h-4" />
