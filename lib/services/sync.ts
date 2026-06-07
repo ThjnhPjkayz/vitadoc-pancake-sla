@@ -34,6 +34,26 @@ function parsePancakeDate(str: string): Date {
   return new Date(str + "+07:00");
 }
 
+// Retry wrapper cho DB operations — NeonDB serverless có thể bị connection drop
+async function withRetry<T>(fn: () => Promise<T>, retries = 3, delayMs = 1000): Promise<T> {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const isConnectionError = err instanceof Error && (
+        err.message.includes("Can't reach database") ||
+        err.message.includes("Connection pool timeout") ||
+        err.message.includes("ECONNRESET") ||
+        err.message.includes("Connection terminated")
+      );
+      if (!isConnectionError || attempt === retries) throw err;
+      console.warn(`[Sync] DB connection error, retry ${attempt}/${retries} in ${delayMs}ms...`);
+      await new Promise((r) => setTimeout(r, delayMs * attempt));
+    }
+  }
+  throw new Error("unreachable");
+}
+
 // ----------------------------------------------------------------
 // Types
 // ----------------------------------------------------------------
@@ -234,7 +254,8 @@ export async function syncConversationBatch(
   pageAccessToken: string,
   stats: SyncStats,
   cursor?: string,
-  since?: Date
+  since?: Date,
+  concurrency = 2
 ): Promise<{ nextCursor: string | null }> {
   const res = await getConversations(pageId, pageAccessToken, cursor);
   const conversations: PancakeConversation[] = res.conversations ?? [];
@@ -253,9 +274,8 @@ export async function syncConversationBatch(
     `[Sync]   📨 Page ${pageId}: ${conversations.length} conversations (cursor=${cursor ?? "start"})${since ? " incremental" : ""}`
   );
 
-  const CONCURRENCY = 2;
-  for (let i = 0; i < conversations.length; i += CONCURRENCY) {
-    const batch = conversations.slice(i, i + CONCURRENCY);
+  for (let i = 0; i < conversations.length; i += concurrency) {
+    const batch = conversations.slice(i, i + concurrency);
     await Promise.allSettled(
       batch.map((conv) =>
         syncSingleConversation(pageId, pageAccessToken!, conv, stats).catch(
@@ -304,7 +324,7 @@ async function syncSingleConversation(
   stats: SyncStats
 ): Promise<void> {
   // --- Save conversation to DB ---
-  await prisma.conversation.upsert({
+  await withRetry(() => prisma.conversation.upsert({
     where: { id: conv.id },
     update: {
       type: conv.type,
@@ -342,14 +362,14 @@ async function syncSingleConversation(
       updatedAtConv: parsePancakeDate(conv.updated_at),
       rawData: conv as unknown as Prisma.InputJsonValue,
     },
-  });
+  }));
   stats.conversations.upserted++;
   updateCounts({ conversations: 1 });
 
   // --- Fetch messages (skip nếu message_count không đổi so với DB) ---
-  const existingMsgCount = await prisma.message.count({
+  const existingMsgCount = await withRetry(() => prisma.message.count({
     where: { conversationId: conv.id },
-  });
+  }));
   const needsFetch = existingMsgCount !== conv.message_count;
 
   let messages: PancakeMessage[] = [];
@@ -386,17 +406,17 @@ async function syncSingleConversation(
       };
     });
 
-    const result = await prisma.message.createMany({
+    const result = await withRetry(() => prisma.message.createMany({
       data: msgData,
       skipDuplicates: true,
-    });
+    }));
     stats.messages.upserted += result.count;
     updateCounts({ messages: result.count });
   }
 
   // --- Tính SLA — chỉ khi có message mới ---
   if (needsFetch) {
-    await calculateSLAForConversation(conv.id, pageId);
+    await withRetry(() => calculateSLAForConversation(conv.id, pageId));
     stats.slaChecked++;
     updateCounts({ slaChecked: 1 });
   }
