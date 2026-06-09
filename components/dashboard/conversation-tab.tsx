@@ -113,8 +113,6 @@ interface FilterState {
   platform: string;
   slaStatus: string;
   hoursFilter: string;
-  dateFrom: string;
-  dateTo: string;
 }
 
 interface FilterOption {
@@ -145,6 +143,8 @@ export interface ConversationTabProps {
   conversationType: "INBOX" | "COMMENT";
   initialPageId?: string;
   initialSlaStatus?: string;
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 // ----------------------------------------------------------------
@@ -197,6 +197,8 @@ export default function ConversationTab({
   conversationType,
   initialPageId = "",
   initialSlaStatus = "",
+  dateFrom = "",
+  dateTo = "",
 }: ConversationTabProps) {
   const { t, locale } = useI18n();
 
@@ -213,8 +215,6 @@ export default function ConversationTab({
     platform: "",
     slaStatus: initialSlaStatus,
     hoursFilter: "",
-    dateFrom: "",
-    dateTo: "",
   });
   const [tableData, setTableData] = useState<ConversationRow[]>([]);
   const [tableTotal, setTableTotal] = useState(0);
@@ -232,8 +232,8 @@ export default function ConversationTab({
       const params = new URLSearchParams({ type: conversationType });
       if (f.pageId) params.set("pageId", f.pageId);
       if (f.platform) params.set("platform", f.platform);
-      if (f.dateFrom) params.set("dateFrom", f.dateFrom);
-      if (f.dateTo) params.set("dateTo", f.dateTo);
+      if (dateFrom) params.set("dateFrom", dateFrom);
+      if (dateTo) params.set("dateTo", dateTo);
       const res = await fetch(`/api/dashboard/conversation-stats?${params}`);
       const json = await res.json();
       if (json.success) setTypeStats(json.stats);
@@ -242,7 +242,7 @@ export default function ConversationTab({
     } finally {
       setStatsLoading(false);
     }
-  }, [conversationType]);
+  }, [conversationType, dateFrom, dateTo]);
 
   const isFirstRender = useRef(true);
 
@@ -257,7 +257,7 @@ export default function ConversationTab({
   useEffect(() => {
     if (isFirstRender.current) { isFirstRender.current = false; return; }
     fetchStats(filters);
-  }, [filters.pageId, filters.platform, filters.dateFrom, filters.dateTo]);
+  }, [filters.pageId, filters.platform, dateFrom, dateTo]);
 
   const fetchTable = useCallback(async () => {
     setTableLoading(true);
@@ -269,8 +269,8 @@ export default function ConversationTab({
       if (filters.platform) params.set("platform", filters.platform);
       if (filters.slaStatus) params.set("slaStatus", filters.slaStatus);
       if (filters.hoursFilter) params.set("hoursFilter", filters.hoursFilter);
-      if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
-      if (filters.dateTo) params.set("dateTo", filters.dateTo);
+      if (dateFrom) params.set("dateFrom", dateFrom);
+      if (dateTo) params.set("dateTo", dateTo);
       params.set("page", String(tablePage));
       params.set("pageSize", String(tablePageSize));
       params.set("sortBy", tableSortBy);
@@ -288,12 +288,12 @@ export default function ConversationTab({
     } finally {
       setTableLoading(false);
     }
-  }, [conversationType, filters, tablePage, tablePageSize, tableSortBy, tableSortOrder]);
+  }, [conversationType, filters, dateFrom, dateTo, tablePage, tablePageSize, tableSortBy, tableSortOrder]);
 
   useEffect(() => {
     setTablePage(1);
     fetchTable();
-  }, [filters]);
+  }, [filters, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchTable();
@@ -310,8 +310,8 @@ export default function ConversationTab({
       if (filters.platform) params.set("platform", filters.platform);
       if (filters.slaStatus) params.set("slaStatus", filters.slaStatus);
       if (filters.hoursFilter) params.set("hoursFilter", filters.hoursFilter);
-      if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
-      if (filters.dateTo) params.set("dateTo", filters.dateTo);
+      if (dateFrom) params.set("dateFrom", dateFrom);
+      if (dateTo) params.set("dateTo", dateTo);
       params.set("page", "1");
       params.set("pageSize", "9999");
       params.set("sortBy", tableSortBy);
@@ -335,7 +335,7 @@ export default function ConversationTab({
     } finally {
       setExporting(false);
     }
-  }, [exporting, conversationType, filters, tableSortBy, tableSortOrder]);
+  }, [exporting, conversationType, filters, dateFrom, dateTo, tableSortBy, tableSortOrder]);
 
   return (
     <div className="space-y-4">

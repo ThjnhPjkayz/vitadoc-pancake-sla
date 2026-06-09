@@ -5,16 +5,37 @@ import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
 
+function getVnDayBoundary(daysAgo: number): Date {
+  const VN_OFFSET_MS = 7 * 3_600_000;
+  const vnNow = Date.now() + VN_OFFSET_MS;
+  const vnMidnightToday = vnNow - (vnNow % 86_400_000);
+  return new Date(vnMidnightToday - daysAgo * 86_400_000 - VN_OFFSET_MS);
+}
+
 export async function GET(req: NextRequest) {
   try {
-    const period = req.nextUrl.searchParams.get("period") ?? "all";
-    const now = new Date();
+    const period = req.nextUrl.searchParams.get("period") ?? "yesterday";
     let dateFrom: Date | undefined;
-    if (period === "7d") dateFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    else if (period === "30d") dateFrom = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    else if (period === "month") dateFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+    let dateTo: Date | undefined;
 
-    const pages = await getPageSummaries(dateFrom);
+    const from = req.nextUrl.searchParams.get("from");
+    const to   = req.nextUrl.searchParams.get("to");
+
+    if (period === "custom" && from && to) {
+      dateFrom = new Date(from);
+      dateTo   = new Date(new Date(to).getTime() + 86_400_000);
+    } else if (period === "yesterday") {
+      dateFrom = getVnDayBoundary(1);
+      dateTo   = getVnDayBoundary(0);
+    } else if (period === "7d") {
+      dateFrom = getVnDayBoundary(7);
+      dateTo   = getVnDayBoundary(0);
+    } else if (period === "30d") {
+      dateFrom = getVnDayBoundary(30);
+      dateTo   = getVnDayBoundary(0);
+    }
+
+    const pages = await getPageSummaries(dateFrom, dateTo);
     return Response.json({ success: true, pages });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

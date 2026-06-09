@@ -56,7 +56,7 @@ function ChartTooltip({
 export default function ResponseTimeTrendChart({
   data,
   loading,
-  period = 30,
+  period = "30d",
 }: ResponseTimeTrendChartProps) {
   const { t } = useI18n();
 
@@ -89,7 +89,8 @@ export default function ResponseTimeTrendChart({
                 tick={{ fontSize: 11, fill: "#9ca3af" }}
                 axisLine={false}
                 tickLine={false}
-                interval={period === 30 ? 4 : period === 14 ? 1 : 0}
+                interval={period === "30d" ? 4 : 0}
+                tickFormatter={(v) => period === "yesterday" ? (Number(v.replace("h","")) % 3 === 0 ? v : "") : v}
               />
               <YAxis
                 allowDecimals={false}

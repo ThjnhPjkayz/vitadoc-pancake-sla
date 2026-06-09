@@ -196,12 +196,115 @@ export async function getDashboardStats(
 }
 
 // ----------------------------------------------------------------
+// Period stats with comparison (Vietnam UTC+7)
+// ----------------------------------------------------------------
+
+export type PeriodKey = "yesterday" | "7d" | "30d";
+
+export interface PeriodStats {
+  label: string;          // e.g. "2025-06-08" or "02/06–08/06"
+  totalResolved: number;
+  lateCount: number;
+  onTimeCount: number;
+  inHoursViolations: number;
+  afterHoursViolations: number;
+  avgResponseTimeMinutes: number;
+  slaSuccessRate: number;
+}
+
+export interface PeriodComparison {
+  current: PeriodStats;
+  prev: PeriodStats;
+}
+
+const VN_OFFSET_MS_STATS = 7 * 3_600_000;
+
+function getVnMidnightUtc(daysAgo: number): Date {
+  const vnNow = Date.now() + VN_OFFSET_MS_STATS;
+  const vnMidnightToday = vnNow - (vnNow % 86_400_000);
+  return new Date(vnMidnightToday - daysAgo * 86_400_000 - VN_OFFSET_MS_STATS);
+}
+
+function fmtDate(d: Date): string {
+  const vn = new Date(d.getTime() + VN_OFFSET_MS_STATS);
+  const dd = String(vn.getUTCDate()).padStart(2, "0");
+  const mm = String(vn.getUTCMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}`;
+}
+
+function periodRanges(period: PeriodKey): { curFrom: Date; curTo: Date; prevFrom: Date; prevTo: Date; label: string } {
+  const today   = getVnMidnightUtc(0);
+  const d1      = getVnMidnightUtc(1);
+  const d2      = getVnMidnightUtc(2);
+  const d7      = getVnMidnightUtc(7);
+  const d14     = getVnMidnightUtc(14);
+  const d30     = getVnMidnightUtc(30);
+  const d60     = getVnMidnightUtc(60);
+
+  if (period === "yesterday") {
+    return { curFrom: d1, curTo: today, prevFrom: d2, prevTo: d1,
+      label: new Date(d1.getTime() + VN_OFFSET_MS_STATS).toISOString().slice(0, 10) };
+  }
+  if (period === "7d") {
+    return { curFrom: d7, curTo: today, prevFrom: d14, prevTo: d7,
+      label: `${fmtDate(d7)}–${fmtDate(d1)}` };
+  }
+  // 30d
+  return { curFrom: d30, curTo: today, prevFrom: d60, prevTo: d30,
+    label: `${fmtDate(d30)}–${fmtDate(d1)}` };
+}
+
+async function fetchPeriodStats(from: Date, to: Date, label: string, pageId?: string): Promise<PeriodStats> {
+  const where = {
+    customerMessageAt: { gte: from, lt: to },
+    slaStatus: { not: "outbound" as const },
+    ...(pageId ? { pageId } : {}),
+  };
+
+  const [lateCount, onTimeCount, inHoursViolations, afterHoursViolations, avgAgg] = await Promise.all([
+    prisma.sLAViolation.count({ where: { ...where, isLateReply: true } }),
+    prisma.sLAViolation.count({ where: { ...where, isLateReply: false, responseTimeMinutes: { not: null } } }),
+    prisma.sLAViolation.count({ where: { ...where, isLateReply: true, outsideBusinessHours: false } }),
+    prisma.sLAViolation.count({ where: { ...where, isLateReply: true, outsideBusinessHours: true } }),
+    prisma.sLAViolation.aggregate({
+      where: { ...where, responseTimeMinutes: { not: null } },
+      _avg: { responseTimeMinutes: true },
+      _count: { id: true },
+    }),
+  ]);
+
+  const totalResolved = avgAgg._count.id;
+  return {
+    label,
+    totalResolved,
+    lateCount,
+    onTimeCount,
+    inHoursViolations,
+    afterHoursViolations,
+    avgResponseTimeMinutes: Math.round(avgAgg._avg.responseTimeMinutes ?? 0),
+    slaSuccessRate: totalResolved > 0 ? onTimeCount / totalResolved : 0,
+  };
+}
+
+export async function getPeriodComparison(period: PeriodKey = "yesterday", pageId?: string): Promise<PeriodComparison> {
+  const { curFrom, curTo, prevFrom, prevTo, label } = periodRanges(period);
+  const prevLabel = period === "yesterday" ? "hôm kia" : `trước đó`;
+  const [current, prev] = await Promise.all([
+    fetchPeriodStats(curFrom, curTo, label, pageId),
+    fetchPeriodStats(prevFrom, prevTo, prevLabel, pageId),
+  ]);
+  return { current, prev };
+}
+
+// ----------------------------------------------------------------
 // Get Page Summaries (leaderboard)
 // ----------------------------------------------------------------
 
-export async function getPageSummaries(dateFrom?: Date): Promise<PageSummary[]> {
+export async function getPageSummaries(dateFrom?: Date, dateTo?: Date): Promise<PageSummary[]> {
   const dateFilter = dateFrom
-    ? Prisma.sql`AND s."customerMessageAt" >= ${dateFrom}`
+    ? dateTo
+      ? Prisma.sql`AND s."customerMessageAt" >= ${dateFrom} AND s."customerMessageAt" < ${dateTo}`
+      : Prisma.sql`AND s."customerMessageAt" >= ${dateFrom}`
     : Prisma.sql``;
 
   const rows = await prisma.$queryRaw<
@@ -267,7 +370,7 @@ export async function getPageSummaries(dateFrom?: Date): Promise<PageSummary[]> 
         lateRate: resolvedCount > 0 ? lateCount / resolvedCount : 0,
       };
     })
-    .sort((a, b) => b.lateRate - a.lateRate);
+    .sort((a, b) => b.lateCount - a.lateCount);
 }
 
 // ----------------------------------------------------------------
@@ -580,6 +683,83 @@ export async function getViolationsTrend(
 }
 
 // ----------------------------------------------------------------
+// Yesterday trend — grouped by hour (VN UTC+7)
+// ----------------------------------------------------------------
+
+const VN_OFFSET_MS = 7 * 3_600_000;
+
+function getYesterdayVnRange(): { from: Date; to: Date } {
+  const vnNow = Date.now() + VN_OFFSET_MS;
+  const vnMidnightToday = vnNow - (vnNow % 86_400_000);
+  return {
+    from: new Date(vnMidnightToday - 86_400_000 - VN_OFFSET_MS),
+    to:   new Date(vnMidnightToday - VN_OFFSET_MS),
+  };
+}
+
+export async function getViolationsTrendHourly(pageId?: string): Promise<ViolationsTrendDay[]> {
+  const { from, to } = getYesterdayVnRange();
+
+  const records = await prisma.sLAViolation.findMany({
+    where: {
+      ...(pageId ? { pageId } : {}),
+      responseTimeMinutes: { not: null },
+      customerMessageAt: { gte: from, lt: to },
+    },
+    select: { customerMessageAt: true, isLateReply: true },
+  });
+
+  const grouped: Record<number, { late: number; onTime: number }> = {};
+  for (let h = 0; h < 24; h++) grouped[h] = { late: 0, onTime: 0 };
+
+  for (const r of records) {
+    if (!r.customerMessageAt) continue;
+    const vnHour = Math.floor((r.customerMessageAt.getTime() + VN_OFFSET_MS) / 3_600_000) % 24;
+    if (r.isLateReply) grouped[vnHour].late++;
+    else grouped[vnHour].onTime++;
+  }
+
+  return Array.from({ length: 24 }, (_, h) => ({
+    date: `${String(h).padStart(2, "0")}h`,
+    ...grouped[h],
+  }));
+}
+
+export async function getResponseTimeTrendHourly(pageId?: string): Promise<ResponseTimeTrendDay[]> {
+  const { from, to } = getYesterdayVnRange();
+
+  const records = await prisma.sLAViolation.findMany({
+    where: {
+      ...(pageId ? { pageId } : {}),
+      responseTimeMinutes: { not: null },
+      customerMessageAt: { gte: from, lt: to },
+    },
+    select: { customerMessageAt: true, conversationType: true, responseTimeMinutes: true },
+  });
+
+  const grouped: Record<number, { inboxSum: number; inboxCount: number; commentSum: number; commentCount: number }> = {};
+  for (let h = 0; h < 24; h++) grouped[h] = { inboxSum: 0, inboxCount: 0, commentSum: 0, commentCount: 0 };
+
+  for (const r of records) {
+    if (!r.customerMessageAt || r.responseTimeMinutes === null) continue;
+    const vnHour = Math.floor((r.customerMessageAt.getTime() + VN_OFFSET_MS) / 3_600_000) % 24;
+    if (r.conversationType === "INBOX") {
+      grouped[vnHour].inboxSum += r.responseTimeMinutes;
+      grouped[vnHour].inboxCount++;
+    } else if (r.conversationType === "COMMENT") {
+      grouped[vnHour].commentSum += r.responseTimeMinutes;
+      grouped[vnHour].commentCount++;
+    }
+  }
+
+  return Array.from({ length: 24 }, (_, h) => ({
+    date: `${String(h).padStart(2, "0")}h`,
+    inbox:   grouped[h].inboxCount   > 0 ? Math.round(grouped[h].inboxSum   / grouped[h].inboxCount)   : null,
+    comment: grouped[h].commentCount > 0 ? Math.round(grouped[h].commentSum / grouped[h].commentCount) : null,
+  }));
+}
+
+// ----------------------------------------------------------------
 // Response Time Trend
 // ----------------------------------------------------------------
 
@@ -636,6 +816,122 @@ export async function getResponseTimeTrend(
       return {
         date: `${dd}/${mm}`,
         inbox: val.inboxCount > 0 ? Math.round(val.inboxSum / val.inboxCount) : null,
+        comment: val.commentCount > 0 ? Math.round(val.commentSum / val.commentCount) : null,
+      };
+    });
+}
+
+// ----------------------------------------------------------------
+// Custom date range: stats, violations trend, response time trend
+// ----------------------------------------------------------------
+
+export async function getStatsForDateRange(dateFrom: Date, dateTo: Date, pageId?: string): Promise<PeriodStats> {
+  const label = `${fmtDate(dateFrom)}–${fmtDate(new Date(dateTo.getTime() - 1))}`;
+  return fetchPeriodStats(dateFrom, dateTo, label, pageId);
+}
+
+export async function getViolationsTrendForRange(dateFrom: Date, dateTo: Date, pageId?: string): Promise<ViolationsTrendDay[]> {
+  const diffDays = (dateTo.getTime() - dateFrom.getTime()) / 86_400_000;
+
+  const records = await prisma.sLAViolation.findMany({
+    where: {
+      ...(pageId ? { pageId } : {}),
+      responseTimeMinutes: { not: null },
+      customerMessageAt: { gte: dateFrom, lt: dateTo },
+    },
+    select: { customerMessageAt: true, isLateReply: true },
+  });
+
+  if (diffDays <= 1) {
+    // Hourly grouping
+    const grouped: Record<number, { late: number; onTime: number }> = {};
+    for (let h = 0; h < 24; h++) grouped[h] = { late: 0, onTime: 0 };
+    for (const r of records) {
+      if (!r.customerMessageAt) continue;
+      const vnHour = Math.floor((r.customerMessageAt.getTime() + VN_OFFSET_MS) / 3_600_000) % 24;
+      if (r.isLateReply) grouped[vnHour].late++;
+      else grouped[vnHour].onTime++;
+    }
+    return Array.from({ length: 24 }, (_, h) => ({
+      date: `${String(h).padStart(2, "0")}h`,
+      ...grouped[h],
+    }));
+  }
+
+  // Daily grouping
+  const days = Math.ceil(diffDays);
+  const grouped: Record<string, { late: number; onTime: number }> = {};
+  for (let i = 0; i < days; i++) {
+    const d = new Date(dateFrom.getTime() + i * 86_400_000 + VN_OFFSET_MS);
+    const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+    grouped[key] = { late: 0, onTime: 0 };
+  }
+  for (const r of records) {
+    if (!r.customerMessageAt) continue;
+    const vnDate = new Date(r.customerMessageAt.getTime() + VN_OFFSET_MS);
+    const key = `${vnDate.getUTCFullYear()}-${String(vnDate.getUTCMonth() + 1).padStart(2, "0")}-${String(vnDate.getUTCDate()).padStart(2, "0")}`;
+    if (!grouped[key]) continue;
+    if (r.isLateReply) grouped[key].late++;
+    else grouped[key].onTime++;
+  }
+  return Object.entries(grouped)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, val]) => {
+      const [, mm, dd] = date.split("-");
+      return { date: `${dd}/${mm}`, ...val };
+    });
+}
+
+export async function getResponseTimeTrendForRange(dateFrom: Date, dateTo: Date, pageId?: string): Promise<ResponseTimeTrendDay[]> {
+  const diffDays = (dateTo.getTime() - dateFrom.getTime()) / 86_400_000;
+
+  const records = await prisma.sLAViolation.findMany({
+    where: {
+      ...(pageId ? { pageId } : {}),
+      responseTimeMinutes: { not: null },
+      customerMessageAt: { gte: dateFrom, lt: dateTo },
+    },
+    select: { customerMessageAt: true, conversationType: true, responseTimeMinutes: true },
+  });
+
+  if (diffDays <= 1) {
+    const grouped: Record<number, { inboxSum: number; inboxCount: number; commentSum: number; commentCount: number }> = {};
+    for (let h = 0; h < 24; h++) grouped[h] = { inboxSum: 0, inboxCount: 0, commentSum: 0, commentCount: 0 };
+    for (const r of records) {
+      if (!r.customerMessageAt || r.responseTimeMinutes === null) continue;
+      const vnHour = Math.floor((r.customerMessageAt.getTime() + VN_OFFSET_MS) / 3_600_000) % 24;
+      if (r.conversationType === "INBOX") { grouped[vnHour].inboxSum += r.responseTimeMinutes; grouped[vnHour].inboxCount++; }
+      else if (r.conversationType === "COMMENT") { grouped[vnHour].commentSum += r.responseTimeMinutes; grouped[vnHour].commentCount++; }
+    }
+    return Array.from({ length: 24 }, (_, h) => ({
+      date: `${String(h).padStart(2, "0")}h`,
+      inbox:   grouped[h].inboxCount   > 0 ? Math.round(grouped[h].inboxSum   / grouped[h].inboxCount)   : null,
+      comment: grouped[h].commentCount > 0 ? Math.round(grouped[h].commentSum / grouped[h].commentCount) : null,
+    }));
+  }
+
+  const days = Math.ceil(diffDays);
+  const grouped: Record<string, { inboxSum: number; inboxCount: number; commentSum: number; commentCount: number }> = {};
+  for (let i = 0; i < days; i++) {
+    const d = new Date(dateFrom.getTime() + i * 86_400_000 + VN_OFFSET_MS);
+    const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+    grouped[key] = { inboxSum: 0, inboxCount: 0, commentSum: 0, commentCount: 0 };
+  }
+  for (const r of records) {
+    if (!r.customerMessageAt || r.responseTimeMinutes === null) continue;
+    const vnDate = new Date(r.customerMessageAt.getTime() + VN_OFFSET_MS);
+    const key = `${vnDate.getUTCFullYear()}-${String(vnDate.getUTCMonth() + 1).padStart(2, "0")}-${String(vnDate.getUTCDate()).padStart(2, "0")}`;
+    if (!grouped[key]) continue;
+    if (r.conversationType === "INBOX") { grouped[key].inboxSum += r.responseTimeMinutes; grouped[key].inboxCount++; }
+    else if (r.conversationType === "COMMENT") { grouped[key].commentSum += r.responseTimeMinutes; grouped[key].commentCount++; }
+  }
+  return Object.entries(grouped)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, val]) => {
+      const [, mm, dd] = date.split("-");
+      return {
+        date: `${dd}/${mm}`,
+        inbox:   val.inboxCount   > 0 ? Math.round(val.inboxSum   / val.inboxCount)   : null,
         comment: val.commentCount > 0 ? Math.round(val.commentSum / val.commentCount) : null,
       };
     });

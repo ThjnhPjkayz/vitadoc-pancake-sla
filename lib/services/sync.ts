@@ -96,27 +96,26 @@ export async function syncAllPages(force = false): Promise<SyncStats> {
   console.log("[Sync] 🚀 Starting full sync...");
   startProgress(0);
 
-  // --- Lấy thời gian sync thành công gần nhất để incremental sync ---
-  let since: Date | undefined;
+  // --- Xác định since — tối đa 30 ngày trở về trước ---
+  const MAX_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+  const thirtyDaysAgo = new Date(Date.now() - MAX_WINDOW_MS);
+  let since: Date;
+
   if (!force) {
     const lastSuccess = await prisma.syncHistory.findFirst({
       where: { status: "success" },
       orderBy: { completedAt: "desc" },
       select: { completedAt: true },
     });
-    if (lastSuccess?.completedAt) {
-      // Trừ 5 phút buffer để tránh miss conversations ở edge case timezone/timing
-      since = new Date(lastSuccess.completedAt.getTime() - 5 * 60 * 1000);
-    }
+    const lastSuccessWithBuffer = lastSuccess?.completedAt
+      ? new Date(lastSuccess.completedAt.getTime() - 5 * 60 * 1000)
+      : thirtyDaysAgo;
+    since = new Date(Math.max(lastSuccessWithBuffer.getTime(), thirtyDaysAgo.getTime()));
+  } else {
+    since = thirtyDaysAgo;
   }
 
-  if (force) {
-    console.log("[Sync] Force full sync — bỏ qua incremental");
-  } else if (since) {
-    console.log(`[Sync] Incremental sync từ ${since.toISOString()}`);
-  } else {
-    console.log("[Sync] Full sync (không có lịch sử thành công trước đó)");
-  }
+  console.log(`[Sync] ${force ? "Force" : "Incremental"} sync từ ${since.toISOString()} (tối đa 30 ngày)`);
 
   // --- STEP 1: Fetch pages from Pancake ---
   let pages: PancakePage[] = [];

@@ -1,26 +1,30 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
+import { useGlobalPeriod } from "@/hooks/use-global-period";
 import PageLeaderboard from "@/components/dashboard/page-leaderboard";
 import type { PageSummary } from "@/lib/services/dashboard";
 
-export type PeriodFilter = "7d" | "30d" | "month" | "all";
-
-export default function PagesPage() {
+function PagesContent() {
   const router = useRouter();
   const { t } = useI18n();
+  const globalPeriod = useGlobalPeriod();
+
   const [pages, setPages] = useState<PageSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState<PeriodFilter>("30d");
 
-  const fetchPages = useCallback(async (p: PeriodFilter) => {
+  const fetchPages = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/dashboard/pages?period=${p}`);
+      const { period, fromParam, toParam } = globalPeriod;
+      const q = period === "custom" && fromParam && toParam
+        ? `period=custom&from=${fromParam}&to=${toParam}`
+        : `period=${period}`;
+      const res = await fetch(`/api/dashboard/pages?${q}`);
       const json = await res.json();
       if (json.success) setPages(json.pages);
     } catch (err) {
@@ -28,15 +32,11 @@ export default function PagesPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [globalPeriod]);
 
   useEffect(() => {
-    fetchPages(period);
-  }, [period]);
-
-  const handlePeriodChange = useCallback((p: PeriodFilter) => {
-    setPeriod(p);
-  }, []);
+    fetchPages();
+  }, [globalPeriod.period, globalPeriod.fromParam, globalPeriod.toParam]);
 
   const handlePageClick = useCallback((pageId: string) => {
     router.push(`/conversations/inbox?pageId=${pageId}&slaStatus=needs-attention`);
@@ -49,7 +49,7 @@ export default function PagesPage() {
           <h1 className="text-2xl font-bold text-zinc-900">{t.pages.title}</h1>
           <p className="text-base text-muted-foreground">{t.pages.description}</p>
         </div>
-        <Button variant="outline" onClick={() => fetchPages(period)}>
+        <Button variant="outline" onClick={fetchPages}>
           <RefreshCw className="w-4 h-4" />
           {t.common.refresh}
         </Button>
@@ -58,10 +58,16 @@ export default function PagesPage() {
       <PageLeaderboard
         pages={pages}
         loading={loading}
-        period={period}
-        onPeriodChange={handlePeriodChange}
         onPageClick={handlePageClick}
       />
     </div>
+  );
+}
+
+export default function PagesPage() {
+  return (
+    <Suspense>
+      <PagesContent />
+    </Suspense>
   );
 }

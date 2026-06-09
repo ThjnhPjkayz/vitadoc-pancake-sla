@@ -134,6 +134,14 @@ export default function ConfigPage() {
     setConfig({ ...config, businessHours: { ...config.businessHours, workDays: days } });
   };
 
+  const updateShift = (idx: number, field: "start" | "end", val: number) => {
+    if (!config) return;
+    const shifts = config.businessHours.shifts.map((s, i) =>
+      i === idx ? { ...s, [field]: val } : s
+    );
+    setConfig({ ...config, businessHours: { ...config.businessHours, shifts } });
+  };
+
   const DAY_LABELS = [
     t.config.days.mon, t.config.days.tue, t.config.days.wed,
     t.config.days.thu, t.config.days.fri, t.config.days.sat, t.config.days.sun,
@@ -168,27 +176,20 @@ export default function ConfigPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
-          {/* Time range */}
-          <div className="flex items-center gap-6">
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-muted-foreground">{t.config.startTime}</span>
-              <TimeInput
-                value={config.businessHours.startHour}
-                onChange={(v) =>
-                  setConfig({ ...config, businessHours: { ...config.businessHours, startHour: v } })
-                }
-              />
-            </div>
-            <span className="text-muted-foreground mt-5">—</span>
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-muted-foreground">{t.config.endTime}</span>
-              <TimeInput
-                value={config.businessHours.endHour}
-                onChange={(v) =>
-                  setConfig({ ...config, businessHours: { ...config.businessHours, endHour: v } })
-                }
-              />
-            </div>
+          {/* Shifts */}
+          <div className="flex flex-col gap-3">
+            {config.businessHours.shifts.map((shift, idx) => (
+              <div key={idx} className="flex items-center gap-4">
+                <span className="text-xs font-medium text-muted-foreground w-10">
+                  Ca {idx + 1}
+                </span>
+                <div className="flex items-center gap-3">
+                  <TimeInput value={shift.start} onChange={(v) => updateShift(idx, "start", v)} />
+                  <span className="text-muted-foreground">—</span>
+                  <TimeInput value={shift.end} onChange={(v) => updateShift(idx, "end", v)} />
+                </div>
+              </div>
+            ))}
           </div>
 
           {/* Work days */}

@@ -1,14 +1,17 @@
-import { readFile, writeFile, mkdir } from "fs/promises";
-import path from "path";
+import { prisma } from "@/lib/prisma";
 
 // ============================================================
 // SLA Configuration
 // ============================================================
 
+export interface BusinessShift {
+  start: number; // 8.5 = 08:30
+  end: number;   // 18.0 = 18:00
+}
+
 export interface BusinessHoursConfig {
-  startHour: number;   // 8 = 08:00
-  endHour: number;     // 17.5 = 17:30
-  workDays: number[];  // 0=Sun, 1=Mon, ..., 6=Sat
+  shifts: BusinessShift[]; // Multiple shifts per day, sorted by start
+  workDays: number[];      // 0=Sun, 1=Mon, ..., 6=Sat
 }
 
 export interface SLAConfig {
@@ -33,17 +36,19 @@ export const DEFAULT_SLA_CONFIG: SLAConfig = {
     COMMENT: 120,
   },
   businessHours: {
-    startHour: 8,
-    endHour: 18,
+    shifts: [
+      { start: 8.5, end: 18 },   // Ca 1: 08:30 – 18:00
+      { start: 19, end: 21 },    // Ca 2: 19:00 – 21:00
+    ],
     workDays: [1, 2, 3, 4, 5, 6], // Mon–Sat
   },
 };
 
 // ============================================================
-// Persistent config (data/sla-config.json)
+// Persistent config (PostgreSQL — Settings table)
 // ============================================================
 
-const CONFIG_PATH = path.join(process.cwd(), "data", "sla-config.json");
+const SETTINGS_KEY = "sla_config";
 
 let _cache: SLAConfig | null = null;
 let _cacheTime = 0;
@@ -52,8 +57,20 @@ const CACHE_TTL_MS = 30_000;
 export async function getSLAConfig(): Promise<SLAConfig> {
   if (_cache && Date.now() - _cacheTime < CACHE_TTL_MS) return _cache;
   try {
-    const raw = await readFile(CONFIG_PATH, "utf-8");
-    _cache = JSON.parse(raw) as SLAConfig;
+    const row = await prisma.settings.findUnique({ where: { key: SETTINGS_KEY } });
+    if (!row) return DEFAULT_SLA_CONFIG;
+
+    const parsed = row.value as unknown as SLAConfig & {
+      businessHours?: { startHour?: number; endHour?: number; workDays?: number[] };
+    };
+    // Migrate old format: businessHours had startHour/endHour instead of shifts
+    if (parsed.businessHours && !parsed.businessHours.shifts) {
+      parsed.businessHours = {
+        shifts: [{ start: parsed.businessHours.startHour ?? 8, end: parsed.businessHours.endHour ?? 18 }],
+        workDays: parsed.businessHours.workDays ?? DEFAULT_SLA_CONFIG.businessHours.workDays,
+      };
+    }
+    _cache = parsed as SLAConfig;
     _cacheTime = Date.now();
     return _cache;
   } catch {
@@ -62,8 +79,11 @@ export async function getSLAConfig(): Promise<SLAConfig> {
 }
 
 export async function setSLAConfig(config: SLAConfig): Promise<void> {
-  await mkdir(path.dirname(CONFIG_PATH), { recursive: true });
-  await writeFile(CONFIG_PATH, JSON.stringify(config, null, 2), "utf-8");
+  await prisma.settings.upsert({
+    where: { key: SETTINGS_KEY },
+    update: { value: config as object },
+    create: { key: SETTINGS_KEY, value: config as object },
+  });
   _cache = config;
   _cacheTime = Date.now();
 }
@@ -108,27 +128,34 @@ function advanceToWorkingTime(
   localTs: number,
   cfg: BusinessHoursConfig
 ): number {
+  const sorted = [...cfg.shifts].sort((a, b) => a.start - b.start);
   let ts = localTs;
-  const { startHour, endHour, workDays } = cfg;
 
-  for (let i = 0; i < 14; i++) {
-    const { dow, hour, dayStart } = getLocalInfo(ts);
-    const dayWorkStart = dayStart + startHour * 3_600_000;
-    const dayWorkEnd = dayStart + endHour * 3_600_000;
+  for (let guard = 0; guard < 14; guard++) {
+    const { dow, dayStart } = getLocalInfo(ts);
 
-    if (!workDays.includes(dow) || ts >= dayWorkEnd) {
-      ts = dayStart + 86_400_000 + startHour * 3_600_000;
+    if (!cfg.workDays.includes(dow)) {
+      ts = dayStart + 86_400_000 + sorted[0].start * 3_600_000;
       continue;
     }
-    if (ts < dayWorkStart) return dayWorkStart;
-    return ts;
+
+    for (const { start, end } of sorted) {
+      const shiftStart = dayStart + start * 3_600_000;
+      const shiftEnd   = dayStart + end   * 3_600_000;
+      if (ts >= shiftEnd) continue;    // past this shift
+      if (ts < shiftStart) return shiftStart; // in gap before this shift
+      return ts;                       // inside this shift
+    }
+
+    // after all shifts today → advance to first shift of next workday
+    ts = dayStart + 86_400_000 + sorted[0].start * 3_600_000;
   }
   return ts;
 }
 
 /**
  * Tính số phút làm việc thực tế giữa start và end,
- * chỉ đếm thời gian trong business hours.
+ * chỉ đếm thời gian trong business hours (hỗ trợ nhiều ca).
  */
 export function calculateWorkingMinutes(
   start: Date,
@@ -138,7 +165,7 @@ export function calculateWorkingMinutes(
 ): number {
   if (start >= end) return 0;
 
-  const { startHour, endHour, workDays } = cfg;
+  const sorted = [...cfg.shifts].sort((a, b) => a.start - b.start);
   const offsetMs = timezone * 3_600_000;
 
   let localStart = start.getTime() + offsetMs;
@@ -152,16 +179,34 @@ export function calculateWorkingMinutes(
 
   while (current < localEnd) {
     const { dow, dayStart } = getLocalInfo(current);
-    const dayWorkEnd = dayStart + endHour * 3_600_000;
 
-    if (!workDays.includes(dow) || current >= dayWorkEnd) {
-      current = dayStart + 86_400_000 + startHour * 3_600_000;
+    if (!cfg.workDays.includes(dow)) {
+      current = dayStart + 86_400_000 + sorted[0].start * 3_600_000;
       continue;
     }
 
-    const periodEnd = Math.min(dayWorkEnd, localEnd);
-    totalMs += periodEnd - current;
-    current = dayStart + 86_400_000 + startHour * 3_600_000;
+    let done = false;
+    for (const { start: s, end: e } of sorted) {
+      const shiftStart = dayStart + s * 3_600_000;
+      const shiftEnd   = dayStart + e * 3_600_000;
+
+      if (current >= shiftEnd) continue; // past this shift
+
+      // current may be in gap before shift — snap to shift start
+      const effectiveStart = Math.max(current, shiftStart);
+      if (effectiveStart >= localEnd) { done = true; break; }
+
+      const periodEnd = Math.min(shiftEnd, localEnd);
+      totalMs += periodEnd - effectiveStart;
+      current = shiftEnd; // advance to end of shift (into next gap or next shift)
+
+      if (current >= localEnd) { done = true; break; }
+    }
+
+    if (!done) {
+      // exhausted all shifts today → advance to first shift of next workday
+      current = dayStart + 86_400_000 + sorted[0].start * 3_600_000;
+    }
   }
 
   return Math.round(totalMs / 60_000);
@@ -169,6 +214,7 @@ export function calculateWorkingMinutes(
 
 /**
  * Kiểm tra xem một thời điểm có nằm ngoài giờ làm việc không.
+ * Gap giữa các ca (vd 18:00–19:00) cũng được coi là ngoài giờ.
  */
 export function isOutsideBusinessHours(
   ts: Date,
@@ -177,9 +223,6 @@ export function isOutsideBusinessHours(
 ): boolean {
   const localTs = ts.getTime() + timezone * 3_600_000;
   const { dow, hour } = getLocalInfo(localTs);
-  return (
-    !cfg.workDays.includes(dow) ||
-    hour < cfg.startHour ||
-    hour >= cfg.endHour
-  );
+  if (!cfg.workDays.includes(dow)) return true;
+  return !cfg.shifts.some((shift) => hour >= shift.start && hour < shift.end);
 }

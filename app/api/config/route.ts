@@ -22,8 +22,12 @@ export async function PUT(request: Request) {
       typeof thresholds?.COMMENT !== "number" ||
       typeof afterHoursThresholds?.INBOX !== "number" ||
       typeof afterHoursThresholds?.COMMENT !== "number" ||
-      typeof businessHours?.startHour !== "number" ||
-      typeof businessHours?.endHour !== "number" ||
+      !Array.isArray(businessHours?.shifts) ||
+      businessHours.shifts.length === 0 ||
+      !businessHours.shifts.every(
+        (s: { start: unknown; end: unknown }) =>
+          typeof s.start === "number" && typeof s.end === "number" && s.end > s.start
+      ) ||
       !Array.isArray(businessHours?.workDays)
     ) {
       return NextResponse.json({ success: false, error: "Invalid config" }, { status: 400 });

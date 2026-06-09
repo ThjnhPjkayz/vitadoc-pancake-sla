@@ -1,13 +1,30 @@
 "use client";
 
+import { Suspense } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { LayoutDashboard, FileText, Inbox, MessageCircle, Settings } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
-export default function Sidebar() {
+function SidebarContent() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { t } = useI18n();
+
+  // Build period query string to preserve across navigation
+  function periodQuery(): string {
+    const period = searchParams.get("period");
+    if (!period || period === "yesterday") return "";
+    const params = new URLSearchParams();
+    params.set("period", period);
+    const from = searchParams.get("from");
+    const to = searchParams.get("to");
+    if (from) params.set("from", from);
+    if (to) params.set("to", to);
+    return `?${params.toString()}`;
+  }
+
+  const query = periodQuery();
 
   const NAV_ITEMS = [
     { label: t.sidebar.dashboard, href: "/dashboard", icon: LayoutDashboard },
@@ -25,7 +42,7 @@ export default function Sidebar() {
           return (
             <Link
               key={href}
-              href={href}
+              href={`${href}${query}`}
               className={`relative flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                 active
                   ? "bg-primary/8 text-primary"
@@ -42,5 +59,23 @@ export default function Sidebar() {
         })}
       </nav>
     </aside>
+  );
+}
+
+export default function Sidebar() {
+  return (
+    <Suspense
+      fallback={
+        <aside className="w-56 shrink-0 border-r border-zinc-200 bg-white flex flex-col py-3">
+          <nav className="flex flex-col gap-0.5 px-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-9 rounded-lg bg-zinc-100 animate-pulse" />
+            ))}
+          </nav>
+        </aside>
+      }
+    >
+      <SidebarContent />
+    </Suspense>
   );
 }

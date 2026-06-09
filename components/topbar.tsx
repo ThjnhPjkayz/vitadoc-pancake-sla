@@ -1,9 +1,11 @@
 "use client";
 
+import { Suspense } from "react";
 import { signOut } from "next-auth/react";
 import { LogOut } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
+import PeriodSelector from "@/components/layout/period-selector";
 
 interface TopbarProps {
   userName: string;
@@ -30,6 +32,11 @@ export default function Topbar({ userName, userEmail, userAvatarUrl }: TopbarPro
       <span className="text-base font-semibold text-zinc-800 tracking-tight">
         {t.common.appName}
       </span>
+
+      {/* Center — Global period selector */}
+      <Suspense fallback={<div className="h-7 w-64 rounded-lg bg-zinc-100 animate-pulse" />}>
+        <PeriodSelector />
+      </Suspense>
 
       {/* Right — Language + Avatar */}
       <div className="flex items-center gap-3">

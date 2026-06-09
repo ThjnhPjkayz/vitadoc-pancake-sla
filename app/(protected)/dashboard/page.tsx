@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
   RefreshCw,
   CloudDownload,
@@ -11,24 +11,26 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
+import { useGlobalPeriod } from "@/hooks/use-global-period";
 
 import StatsCards from "@/components/dashboard/stats-cards";
 import ViolationsTrendChart, { type ChartPeriod } from "@/components/dashboard/violations-trend-chart";
 import ResponseTimeTrendChart from "@/components/dashboard/response-time-trend-chart";
 
-import type { DashboardStats, ViolationsTrendDay, ResponseTimeTrendDay } from "@/lib/services/dashboard";
+import type { DashboardStats, PeriodComparison, ViolationsTrendDay, ResponseTimeTrendDay } from "@/lib/services/dashboard";
 
-export default function DashboardPage() {
+function DashboardContent() {
   const { t } = useI18n();
+  const globalPeriod = useGlobalPeriod();
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [comparison, setComparison] = useState<PeriodComparison | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
 
   const [trendData, setTrendData] = useState<ViolationsTrendDay[]>([]);
   const [trendLoading, setTrendLoading] = useState(true);
   const [responseTimeTrendData, setResponseTimeTrendData] = useState<ResponseTimeTrendDay[]>([]);
   const [responseTimeTrendLoading, setResponseTimeTrendLoading] = useState(true);
-  const [chartPeriod, setChartPeriod] = useState<ChartPeriod>(30);
 
   const [syncing, setSyncing] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
@@ -48,26 +50,38 @@ export default function DashboardPage() {
   // true khi sync được detect từ DB (cron/tab khác), không phải do client này khởi tạo
   const isExternalSyncRef = useRef(false);
 
+  const buildPeriodQuery = useCallback(() => {
+    const { period, fromParam, toParam } = globalPeriod;
+    if (period === "custom" && fromParam && toParam) {
+      return `period=custom&from=${fromParam}&to=${toParam}`;
+    }
+    return `period=${period}`;
+  }, [globalPeriod]);
+
   const fetchStats = useCallback(async () => {
     setStatsLoading(true);
     try {
-      const res = await fetch("/api/dashboard/stats");
+      const res = await fetch(`/api/dashboard/stats?${buildPeriodQuery()}`);
       const json = await res.json();
-      if (json.success) setStats(json.stats);
+      if (json.success) {
+        setStats(json.stats);
+        if (json.comparison) setComparison(json.comparison);
+      }
     } catch (err) {
       console.error("Failed to fetch stats:", err);
     } finally {
       setStatsLoading(false);
     }
-  }, []);
+  }, [buildPeriodQuery]);
 
-  const fetchTrend = useCallback(async (days: ChartPeriod) => {
+  const fetchTrend = useCallback(async () => {
     setTrendLoading(true);
     setResponseTimeTrendLoading(true);
     try {
+      const q = buildPeriodQuery();
       const [violationsRes, responseTimeRes] = await Promise.all([
-        fetch(`/api/dashboard/violations-trend?days=${days}`),
-        fetch(`/api/dashboard/response-time-trend?days=${days}`),
+        fetch(`/api/dashboard/violations-trend?${q}`),
+        fetch(`/api/dashboard/response-time-trend?${q}`),
       ]);
       const [violationsJson, responseTimeJson] = await Promise.all([
         violationsRes.json(),
@@ -81,7 +95,7 @@ export default function DashboardPage() {
       setTrendLoading(false);
       setResponseTimeTrendLoading(false);
     }
-  }, []);
+  }, [buildPeriodQuery]);
 
   const checkSyncStatus = useCallback(async (): Promise<"running" | "success" | "failed" | "cancelled" | null> => {
     try {
@@ -184,7 +198,7 @@ export default function DashboardPage() {
       } else {
         setSyncResult({ type: "success", message: t.dashboard.syncSuccess });
         fetchStats();
-        fetchTrend(chartPeriod);
+        fetchTrend();
       }
     } catch (err) {
       setSyncing(false);
@@ -198,7 +212,7 @@ export default function DashboardPage() {
       }
       setSyncResult({ type: "error", message: t.dashboard.cannotConnect });
     }
-  }, [syncing, t, fetchStats, fetchTrend, chartPeriod]);
+  }, [syncing, t, fetchStats, fetchTrend]);
 
   const handleStopSync = useCallback(async () => {
     syncCancelledRef.current = true;
@@ -221,7 +235,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchStats();
-    fetchTrend(chartPeriod);
+    fetchTrend();
     checkSyncStatus().then((status) => {
       if (status === "running") {
         isExternalSyncRef.current = true;
@@ -241,16 +255,18 @@ export default function DashboardPage() {
         setSyncProgress(null);
         if (status === "success") {
           fetchStats();
-          fetchTrend(chartPeriod);
+          fetchTrend();
         }
       }
     }, 5000);
     return () => clearInterval(interval);
-  }, [syncing, checkSyncStatus, fetchStats, fetchTrend, chartPeriod]);
+  }, [syncing, checkSyncStatus, fetchStats, fetchTrend]);
 
+  // Refetch khi global period thay đổi
   useEffect(() => {
-    fetchTrend(chartPeriod);
-  }, [chartPeriod]);
+    fetchStats();
+    fetchTrend();
+  }, [globalPeriod.period, globalPeriod.fromParam, globalPeriod.toParam]);
 
   return (
     <div className="space-y-6">
@@ -301,7 +317,7 @@ export default function DashboardPage() {
               </Button>
             )
           )}
-          <Button variant="outline" onClick={() => { fetchStats(); fetchTrend(chartPeriod); }}>
+          <Button variant="outline" onClick={() => { fetchStats(); fetchTrend(); }}>
             <RefreshCw className="w-4 h-4" />
             {t.common.refresh}
           </Button>
@@ -364,6 +380,7 @@ export default function DashboardPage() {
           inHoursViolations={stats.inHoursViolations}
           afterHoursViolations={stats.afterHoursViolations}
           slaSuccessRate={stats.slaSuccessRate}
+          comparison={comparison ?? undefined}
         />
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -378,15 +395,22 @@ export default function DashboardPage() {
         <ViolationsTrendChart
           data={trendData}
           loading={trendLoading}
-          period={chartPeriod}
-          onPeriodChange={setChartPeriod}
+          period={globalPeriod.period as ChartPeriod}
         />
         <ResponseTimeTrendChart
           data={responseTimeTrendData}
           loading={responseTimeTrendLoading}
-          period={chartPeriod}
+          period={globalPeriod.period as ChartPeriod}
         />
       </div>
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense>
+      <DashboardContent />
+    </Suspense>
   );
 }

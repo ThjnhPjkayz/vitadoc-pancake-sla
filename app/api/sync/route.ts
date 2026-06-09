@@ -41,17 +41,23 @@ export async function POST(request: Request) {
     select: { id: true },
   });
 
-  // Xác định since date cho incremental sync
-  let since: string | null = null;
+  // Xác định since date — tối đa 30 ngày trở về trước
+  const MAX_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+  const thirtyDaysAgo = new Date(Date.now() - MAX_WINDOW_MS);
+
+  let since: string;
   if (!force) {
     const lastSuccess = await prisma.syncHistory.findFirst({
       where: { status: "success" },
       orderBy: { completedAt: "desc" },
       select: { completedAt: true },
     });
-    if (lastSuccess?.completedAt) {
-      since = new Date(lastSuccess.completedAt.getTime() - 5 * 60 * 1000).toISOString();
-    }
+    const lastSuccessWithBuffer = lastSuccess?.completedAt
+      ? new Date(lastSuccess.completedAt.getTime() - 5 * 60 * 1000)
+      : thirtyDaysAgo;
+    since = new Date(Math.max(lastSuccessWithBuffer.getTime(), thirtyDaysAgo.getTime())).toISOString();
+  } else {
+    since = thirtyDaysAgo.toISOString();
   }
 
   // Lấy danh sách pages từ Pancake

@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, X, Calendar } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -26,8 +26,6 @@ interface FiltersBarProps {
     platform: string;
     slaStatus: string;
     hoursFilter: string;
-    dateFrom: string;
-    dateTo: string;
   };
   onFilterChange: (filters: FiltersBarProps["filters"]) => void;
   pages: FilterOption[];
@@ -78,9 +76,7 @@ export default function FiltersBar({
     filters.pageId ||
     filters.platform ||
     filters.slaStatus ||
-    filters.hoursFilter ||
-    filters.dateFrom ||
-    filters.dateTo;
+    filters.hoursFilter;
 
   const SLA_STATUS_OPTIONS = [
     { value: ALL, label: t.filters.allStatuses },
@@ -206,32 +202,6 @@ export default function FiltersBar({
         </Select>
       </FilterField>
 
-      {/* Date From */}
-      <FilterField label={t.filters.from}>
-        <div className="relative">
-          <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-          <Input
-            type="date"
-            value={filters.dateFrom}
-            onChange={(e) => update("dateFrom", e.target.value)}
-            className="pl-8 [color-scheme:light]"
-          />
-        </div>
-      </FilterField>
-
-      {/* Date To */}
-      <FilterField label={t.filters.to}>
-        <div className="relative">
-          <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-          <Input
-            type="date"
-            value={filters.dateTo}
-            onChange={(e) => update("dateTo", e.target.value)}
-            className="pl-8 [color-scheme:light]"
-          />
-        </div>
-      </FilterField>
-
       {/* Clear all */}
       {hasActiveFilters && (
         <Button
@@ -244,8 +214,6 @@ export default function FiltersBar({
               platform: "",
               slaStatus: "",
               hoursFilter: "",
-              dateFrom: "",
-              dateTo: "",
             })
           }
           className="text-destructive hover:text-destructive hover:bg-destructive/10 mb-0.5"

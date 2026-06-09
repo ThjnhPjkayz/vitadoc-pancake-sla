@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useI18n } from "@/lib/i18n";
 import type { ViolationsTrendDay } from "@/lib/services/dashboard";
 
-export type ChartPeriod = 7 | 14 | 30;
+export type ChartPeriod = "yesterday" | "7d" | "30d";
 
 const COLOR_ON_TIME = "#10b981"; // --chart-2 (emerald-500)
 const COLOR_LATE    = "#ef4444"; // --chart-3 (red-500)
@@ -23,7 +23,6 @@ interface ViolationsTrendChartProps {
   data: ViolationsTrendDay[];
   loading?: boolean;
   period?: ChartPeriod;
-  onPeriodChange?: (p: ChartPeriod) => void;
 }
 
 function ChartTooltip({
@@ -65,38 +64,16 @@ function ChartTooltip({
 export default function ViolationsTrendChart({
   data,
   loading,
-  period = 30,
-  onPeriodChange,
+  period = "30d",
 }: ViolationsTrendChartProps) {
   const { t } = useI18n();
 
-  const periods: { value: ChartPeriod; label: string }[] = [
-    { value: 7, label: t.dashboard.period7d },
-    { value: 14, label: t.dashboard.period14d },
-    { value: 30, label: t.dashboard.period30d },
-  ];
-
   return (
     <Card>
-      <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+      <CardHeader className="pb-2">
         <CardTitle className="text-base font-medium text-muted-foreground">
           {t.dashboard.violationsTitle}
         </CardTitle>
-        <div className="flex items-center gap-1 rounded-lg border bg-muted/40 p-0.5">
-          {periods.map((p) => (
-            <button
-              key={p.value}
-              onClick={() => onPeriodChange?.(p.value)}
-              className={`px-3 py-1 text-xs rounded-md transition-colors font-medium ${
-                period === p.value
-                  ? "bg-white text-zinc-900 shadow-sm"
-                  : "text-muted-foreground hover:text-zinc-700"
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -110,7 +87,8 @@ export default function ViolationsTrendChart({
                 tick={{ fontSize: 11, fill: "#9ca3af" }}
                 axisLine={false}
                 tickLine={false}
-                interval={period === 30 ? 4 : period === 14 ? 1 : 0}
+                interval={period === "30d" ? 4 : 0}
+                tickFormatter={(v) => period === "yesterday" ? (Number(v.replace("h","")) % 3 === 0 ? v : "") : v}
               />
               <YAxis
                 allowDecimals={false}

@@ -1,16 +1,29 @@
-// GET /api/dashboard/response-time-trend — Avg response time per day
+// GET /api/dashboard/response-time-trend — Avg response time over time
 
-import { getResponseTimeTrend } from "@/lib/services/dashboard";
+import { getResponseTimeTrend, getResponseTimeTrendHourly, getResponseTimeTrendForRange } from "@/lib/services/dashboard";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const pageId = searchParams.get("pageId") ?? undefined;
-  const days = Math.min(30, Math.max(7, Number(searchParams.get("days") ?? 30)));
+  const period = searchParams.get("period") ?? "yesterday";
+  const from   = searchParams.get("from");
+  const to     = searchParams.get("to");
 
   try {
-    const trend = await getResponseTimeTrend(days, pageId);
+    let trend;
+    if (period === "custom" && from && to) {
+      const dateFrom = new Date(from);
+      const dateTo = new Date(new Date(to).getTime() + 86_400_000);
+      trend = await getResponseTimeTrendForRange(dateFrom, dateTo, pageId);
+    } else if (period === "yesterday") {
+      trend = await getResponseTimeTrendHourly(pageId);
+    } else if (period === "7d") {
+      trend = await getResponseTimeTrend(7, pageId);
+    } else {
+      trend = await getResponseTimeTrend(30, pageId);
+    }
     return Response.json({ success: true, trend });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

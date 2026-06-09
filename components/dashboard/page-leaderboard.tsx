@@ -1,7 +1,6 @@
 "use client";
 
 import type { PageSummary } from "@/lib/services/dashboard";
-import type { PeriodFilter } from "@/app/(protected)/pages/page";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -30,8 +29,6 @@ const PLATFORM_COLORS: Record<string, string> = {
 interface PageLeaderboardProps {
   pages: PageSummary[];
   loading?: boolean;
-  period?: PeriodFilter;
-  onPeriodChange?: (p: PeriodFilter) => void;
   onPageClick?: (pageId: string) => void;
 }
 
@@ -88,18 +85,9 @@ function LateRateBar({ rate }: { rate: number }) {
 export default function PageLeaderboard({
   pages,
   loading,
-  period = "30d",
-  onPeriodChange,
   onPageClick,
 }: PageLeaderboardProps) {
   const { t } = useI18n();
-
-  const periodOptions: { value: PeriodFilter; label: string }[] = [
-    { value: "7d", label: t.pages.filter.last7 },
-    { value: "30d", label: t.pages.filter.last30 },
-    { value: "month", label: t.pages.filter.thisMonth },
-    { value: "all", label: t.pages.filter.allTime },
-  ];
 
   if (loading) {
     return (
@@ -130,26 +118,9 @@ export default function PageLeaderboard({
 
   return (
     <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
-      <div className="px-5 py-4 border-b flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h2 className="text-base font-semibold">{t.pages.leaderboardTitle}</h2>
-          <span className="text-xs text-muted-foreground">{t.pages.sortedByNote}</span>
-        </div>
-        <div className="flex items-center gap-1 rounded-lg border bg-muted/40 p-0.5">
-          {periodOptions.map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => onPeriodChange?.(opt.value)}
-              className={`px-3 py-1 text-xs rounded-md transition-colors font-medium ${
-                period === opt.value
-                  ? "bg-white text-zinc-900 shadow-sm"
-                  : "text-muted-foreground hover:text-zinc-700"
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
+      <div className="px-5 py-4 border-b flex items-center gap-3">
+        <h2 className="text-base font-semibold">{t.pages.leaderboardTitle}</h2>
+        <span className="text-xs text-muted-foreground">{t.pages.sortedByNote}</span>
       </div>
 
       <Table>
