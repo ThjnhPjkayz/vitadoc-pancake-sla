@@ -150,7 +150,7 @@ export async function syncAllPages(force = false): Promise<SyncStats> {
     if (syncRecord) await flushToDB(syncRecord.id);
 
     try {
-      await syncSinglePage(page, stats, since);
+      await syncSinglePage(page, stats, since, force);
     } catch (err) {
       stats.errors.push(`Page ${page.id} (${page.name}): ${String(err)}`);
       updateCounts({ errors: 1 });
@@ -254,7 +254,8 @@ export async function syncConversationBatch(
   stats: SyncStats,
   cursor?: string,
   since?: Date,
-  concurrency = 2
+  concurrency = 2,
+  forceMessages = false
 ): Promise<{ nextCursor: string | null }> {
   const res = await getConversations(pageId, pageAccessToken, cursor);
   const conversations: PancakeConversation[] = res.conversations ?? [];
@@ -277,7 +278,7 @@ export async function syncConversationBatch(
     const batch = conversations.slice(i, i + concurrency);
     await Promise.allSettled(
       batch.map((conv) =>
-        syncSingleConversation(pageId, pageAccessToken!, conv, stats).catch(
+        syncSingleConversation(pageId, pageAccessToken!, conv, stats, forceMessages).catch(
           (err) => stats.errors.push(`Conv ${conv.id}: ${String(err)}`)
         )
       )
@@ -300,13 +301,14 @@ export async function syncConversationBatch(
 export async function syncSinglePage(
   page: PancakePage,
   stats: SyncStats,
-  since?: Date
+  since?: Date,
+  forceMessages = false
 ): Promise<void> {
   const pageAccessToken = await ensurePageAndGetToken(page, stats);
 
   let cursor: string | undefined;
   do {
-    const { nextCursor } = await syncConversationBatch(page.id, pageAccessToken, stats, cursor, since);
+    const { nextCursor } = await syncConversationBatch(page.id, pageAccessToken, stats, cursor, since, 2, forceMessages);
     cursor = nextCursor ?? undefined;
     if (cursor) await new Promise((r) => setTimeout(r, 300));
   } while (cursor);
@@ -320,8 +322,23 @@ async function syncSingleConversation(
   pageId: string,
   pageAccessToken: string,
   conv: PancakeConversation,
-  stats: SyncStats
+  stats: SyncStats,
+  forceMessages = false
 ): Promise<void> {
+  // --- Đọc state cũ TRƯỚC khi upsert để biết hội thoại có thay đổi không ---
+  // ⚠️ Không dùng message_count để so sánh: số này (vd 415) KHÁC số message
+  // fetch được thật (vd 120) → so sánh sẽ luôn lệch. Dùng updated_at làm tín hiệu.
+  const existing = await withRetry(() => prisma.conversation.findUnique({
+    where: { id: conv.id },
+    select: { updatedAtConv: true },
+  }));
+  const convUpdatedAt = parsePancakeDate(conv.updated_at);
+  const needsFetch =
+    forceMessages ||
+    !existing ||
+    !existing.updatedAtConv ||
+    existing.updatedAtConv.getTime() !== convUpdatedAt.getTime();
+
   // --- Save conversation to DB ---
   await withRetry(() => prisma.conversation.upsert({
     where: { id: conv.id },
@@ -365,12 +382,7 @@ async function syncSingleConversation(
   stats.conversations.upserted++;
   updateCounts({ conversations: 1 });
 
-  // --- Fetch messages (skip nếu message_count không đổi so với DB) ---
-  const existingMsgCount = await withRetry(() => prisma.message.count({
-    where: { conversationId: conv.id },
-  }));
-  const needsFetch = existingMsgCount !== conv.message_count;
-
+  // --- Fetch messages (skip nếu hội thoại không có hoạt động mới) ---
   let messages: PancakeMessage[] = [];
   if (needsFetch) {
     try {

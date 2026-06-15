@@ -109,10 +109,12 @@ export const CONVERSATIONS_PAGE_SIZE = 60;
 export async function getConversations(
   pageId: string,
   pageAccessToken: string,
-  beforeId?: string
+  lastConversationId?: string
 ): Promise<PancakeConversationsResponse> {
+  // ⚠️ Tham số cursor đúng là `last_conversation_id` — Pancake BỎ QUA `before_id`
+  // (đã verify: before_id luôn trả lại trang đầu → chỉ sync được 60 hội thoại mới nhất)
   let url = `${BASE_URL}/public_api/v2/pages/${pageId}/conversations?page_access_token=${pageAccessToken}`;
-  if (beforeId) url += `&before_id=${beforeId}`;
+  if (lastConversationId) url += `&last_conversation_id=${lastConversationId}`;
 
   const res = await fetchWithRetry(url, {
     headers: { Accept: "application/json" },
@@ -170,16 +172,48 @@ export async function getAllConversations(
 // 4️⃣ Get Messages — Lấy tin nhắn trong hội thoại
 // ----------------------------------------------------------------
 
+export const MESSAGES_PAGE_SIZE = 30;
+const MAX_MESSAGE_PAGES = 40; // safety cap (~1200 messages/conversation)
+
 export async function getMessages(
   pageId: string,
   conversationId: string,
   pageAccessToken: string
 ): Promise<PancakeMessagesResponse> {
-  const url = `${BASE_URL}/public_api/v1/pages/${pageId}/conversations/${conversationId}/messages?page_access_token=${pageAccessToken}`;
+  const baseUrl = `${BASE_URL}/public_api/v1/pages/${pageId}/conversations/${conversationId}/messages?page_access_token=${pageAccessToken}`;
 
-  const res = await fetchWithRetry(url, {
-    headers: { Accept: "application/json" },
-  });
+  // Lần đầu — giữ lại metadata (post, customers...) để trả về nguyên vẹn
+  const firstRes = await fetchWithRetry(baseUrl, { headers: { Accept: "application/json" } });
+  const firstJson = (await firstRes.json()) as PancakeMessagesResponse;
+  const allMessages = [...(firstJson.messages ?? [])];
 
-  return res.json();
+  // ⚠️ Endpoint chỉ trả tối đa 30 message/lần — phân trang bằng `current_count` (offset)
+  // (đã verify: không có tham số này → mất hết message cũ của hội thoại >30 tin)
+  const seenIds = new Set(allMessages.map((m) => m.id));
+  let count = allMessages.length;
+  let pageCount = 1;
+
+  while (
+    allMessages.length > 0 &&
+    count % MESSAGES_PAGE_SIZE === 0 &&
+    pageCount < MAX_MESSAGE_PAGES
+  ) {
+    const res = await fetchWithRetry(`${baseUrl}&current_count=${count}`, {
+      headers: { Accept: "application/json" },
+    });
+    const json = (await res.json()) as PancakeMessagesResponse;
+    const batch = json.messages ?? [];
+    if (batch.length === 0) break;
+
+    const fresh = batch.filter((m) => !seenIds.has(m.id));
+    if (fresh.length === 0) break; // không còn message mới → dừng
+    fresh.forEach((m) => seenIds.add(m.id));
+    allMessages.push(...fresh);
+
+    count += batch.length;
+    pageCount++;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+
+  return { ...firstJson, messages: allMessages };
 }

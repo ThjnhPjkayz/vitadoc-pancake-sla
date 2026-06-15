@@ -20,9 +20,10 @@ export async function POST(request: Request) {
     messages: number;
     slaChecked: number;
     cursor?: string | null;
+    force?: boolean;
   };
 
-  const { syncId, pageIndex, totalPages, page, since, conversations = 0, messages = 0, slaChecked = 0, cursor } = body;
+  const { syncId, pageIndex, totalPages, page, since, conversations = 0, messages = 0, slaChecked = 0, cursor, force = false } = body;
 
   const record = await prisma.syncHistory.findUnique({
     where: { id: syncId },
@@ -82,7 +83,9 @@ export async function POST(request: Request) {
       pageAccessToken,
       stats,
       cursor ?? undefined,
-      sinceDate
+      sinceDate,
+      2,
+      force
     );
 
     return Response.json({ success: true, stats, nextCursor });

@@ -164,7 +164,7 @@ function DashboardContent() {
           const pageRes: Response = await fetch("/api/sync/page", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ syncId, pageIndex: i + 1, totalPages: pages.length, page, since, conversations: totals.conversations, messages: totals.messages, slaChecked: totals.slaChecked, cursor }),
+            body: JSON.stringify({ syncId, pageIndex: i + 1, totalPages: pages.length, page, since, conversations: totals.conversations, messages: totals.messages, slaChecked: totals.slaChecked, cursor, force }),
           });
           const pageJson: { success: boolean; cancelled?: boolean; stats?: { pages: { upserted: number }; conversations: { upserted: number }; messages: { upserted: number }; slaChecked: number; errors: string[] }; nextCursor?: string | null } = await pageRes.json();
 
