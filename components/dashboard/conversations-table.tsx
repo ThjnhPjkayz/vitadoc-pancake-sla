@@ -128,10 +128,19 @@ function SLABadge({ row, labels }: { row: ConversationRow; labels: { outbound: s
   );
 }
 
+// Luôn hiển thị theo giờ VN (Asia/Ho_Chi_Minh) để khớp Pancake, không phụ thuộc
+// timezone của trình duyệt người xem.
 function formatDate(iso: string) {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date(iso));
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "00";
+  return `${get("day")}/${get("month")} ${get("hour")}:${get("minute")}`;
 }
 
 export default function ConversationsTable({

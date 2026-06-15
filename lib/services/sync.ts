@@ -28,10 +28,11 @@ import type {
   PancakeMessage,
 } from "@/lib/types/pancake";
 
-// Pancake trả inserted_at/updated_at dạng "2024-01-15T10:30:00" không có timezone
-// → phải gắn "+07:00" để parse đúng UTC+7
+// Pancake trả inserted_at/updated_at dạng "2024-01-15T10:30:00" KHÔNG có timezone,
+// và giá trị này là giờ UTC (đã verify: tin mới nhất khớp Date.now() theo UTC, lệch
+// đúng 7h so với giờ VN). → gắn "Z" để parse là UTC. (Trước đây gắn "+07:00" sai → lệch 7h)
 function parsePancakeDate(str: string): Date {
-  return new Date(str + "+07:00");
+  return new Date(str + "Z");
 }
 
 // Retry wrapper cho DB operations — NeonDB serverless có thể bị connection drop
@@ -271,7 +272,7 @@ export async function syncConversationBatch(
   //  - Lọc since theo TỪNG hội thoại để không lưu hội thoại ngoài cửa sổ.
   //  - Khi cả batch (60) đều cũ hơn since → mọi hội thoại sau cũng cũ → dừng sớm.
   const isRecent = (c: PancakeConversation) =>
-    !since || !c.updated_at || new Date(c.updated_at + "+07:00") >= since;
+    !since || !c.updated_at || new Date(c.updated_at + "Z") >= since;
 
   if (since && !conversations.some(isRecent)) {
     return { nextCursor: null };

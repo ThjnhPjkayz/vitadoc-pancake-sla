@@ -145,7 +145,7 @@ export async function getAllConversations(
     // null updated_at → coi là "có thể mới" để tránh bỏ sót
     if (since) {
       const hasNewConv = batch.some(
-        (c) => !c.updated_at || new Date(c.updated_at + "+07:00") >= since
+        (c) => !c.updated_at || new Date(c.updated_at + "Z") >= since
       );
       if (!hasNewConv) break;
     }
