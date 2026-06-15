@@ -36,19 +36,32 @@ function parsePancakeDate(str: string): Date {
 }
 
 // Retry wrapper cho DB operations — NeonDB serverless có thể bị connection drop
-async function withRetry<T>(fn: () => Promise<T>, retries = 3, delayMs = 1000): Promise<T> {
+// hoặc treo (connection lag). ⚠️ BẮT BUỘC có timeout mỗi attempt: nếu không,
+// một query treo sẽ chờ vô hạn → function chạy tới maxDuration (300s) rồi 504.
+const DB_OP_TIMEOUT_MS = 12_000;
+
+async function withRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 800): Promise<T> {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      return await fn();
+      const op = fn();
+      op.catch(() => {}); // nuốt rejection muộn nếu op thua race (tránh unhandled rejection)
+      return await Promise.race([
+        op,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("DB operation timeout")), DB_OP_TIMEOUT_MS)
+        ),
+      ]);
     } catch (err) {
-      const isConnectionError = err instanceof Error && (
+      const isRetryable = err instanceof Error && (
         err.message.includes("Can't reach database") ||
         err.message.includes("Connection pool timeout") ||
+        err.message.includes("connection pool") ||
         err.message.includes("ECONNRESET") ||
-        err.message.includes("Connection terminated")
+        err.message.includes("Connection terminated") ||
+        err.message.includes("DB operation timeout")
       );
-      if (!isConnectionError || attempt === retries) throw err;
-      console.warn(`[Sync] DB connection error, retry ${attempt}/${retries} in ${delayMs}ms...`);
+      if (!isRetryable || attempt === retries) throw err;
+      console.warn(`[Sync] DB error (${err.message.slice(0, 60)}), retry ${attempt}/${retries}...`);
       await new Promise((r) => setTimeout(r, delayMs * attempt));
     }
   }

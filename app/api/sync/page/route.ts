@@ -80,16 +80,16 @@ export async function POST(request: Request) {
       pageAccessToken = dbPage.pageAccessToken;
     }
 
-    // Budget 30s/request để giữ tiến độ mượt + biên an toàn rất lớn dưới maxDuration 300s.
-    // Phần dư của page tiếp tục ở request sau (resume bằng cursor).
-    const deadline = Date.now() + 30_000;
+    // Budget 20s/request + concurrency 1 → deadline được kiểm tra sau MỖI hội thoại,
+    // giảm áp lực connection DB. Biên an toàn rất lớn dưới maxDuration 300s.
+    const deadline = Date.now() + 20_000;
     const { nextCursor } = await syncConversationBatch(
       page.id,
       pageAccessToken,
       stats,
       cursor ?? undefined,
       sinceDate,
-      2,
+      1,
       force,
       deadline
     );
