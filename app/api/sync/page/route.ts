@@ -78,8 +78,9 @@ export async function POST(request: Request) {
       pageAccessToken = dbPage.pageAccessToken;
     }
 
-    // maxDuration = 60s → chừa margin, dừng batch sau 40s rồi tiếp tục ở request sau
-    const deadline = Date.now() + 40_000;
+    // maxDuration = 60s → chừa margin lớn (30s) cho nhóm hội thoại cuối + fetch
+    // messages có thể chậm/retry, tránh 504. Phần dư tiếp tục ở request sau.
+    const deadline = Date.now() + 30_000;
     const { nextCursor } = await syncConversationBatch(
       page.id,
       pageAccessToken,

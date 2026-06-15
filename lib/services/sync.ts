@@ -287,7 +287,7 @@ export async function syncConversationBatch(
     if (batch.length > 0) {
       await Promise.allSettled(
         batch.map((conv) =>
-          syncSingleConversation(pageId, pageAccessToken!, conv, stats, forceMessages).catch(
+          syncSingleConversation(pageId, pageAccessToken!, conv, stats, forceMessages, deadline).catch(
             (err) => stats.errors.push(`Conv ${conv.id}: ${String(err)}`)
           )
         )
@@ -342,7 +342,8 @@ async function syncSingleConversation(
   pageAccessToken: string,
   conv: PancakeConversation,
   stats: SyncStats,
-  forceMessages = false
+  forceMessages = false,
+  deadline?: number
 ): Promise<void> {
   // --- Đọc state cũ TRƯỚC khi upsert để biết hội thoại có thay đổi không ---
   // ⚠️ Không dùng message_count để so sánh: số này (vd 415) KHÁC số message
@@ -405,7 +406,7 @@ async function syncSingleConversation(
   let messages: PancakeMessage[] = [];
   if (needsFetch) {
     try {
-      const msgRes = await getMessages(pageId, conv.id, pageAccessToken);
+      const msgRes = await getMessages(pageId, conv.id, pageAccessToken, deadline);
       messages = msgRes.messages;
     } catch (err) {
       stats.errors.push(`Messages ${conv.id}: ${String(err)}`);

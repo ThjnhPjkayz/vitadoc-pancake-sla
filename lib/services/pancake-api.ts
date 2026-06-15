@@ -18,7 +18,7 @@ const USER_ACCESS_TOKEN =
   process.env.PANCAKE_ACCESS_TOKEN ??
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiZnB0bWVkdGVjaCIsImV4cCI6MTc4NTIwNjg3NiwiYXBwbGljYXRpb24iOjEsInVpZCI6ImEzZjk3ZjZhLTUwNDktNDY0OC1iZDRmLTgyNzA0YzU0YTExYyIsInNlc3Npb25faWQiOiJlNzhhZjkwOC05NTM5LTQ0ZGUtODE0NC05NzExMGUwODk2YTMiLCJpYXQiOjE3Nzc0MzA4NzYsImZiX2lkIjoiMjAwOTk5MDI0MDgwMDE5IiwibG9naW5fc2Vzc2lvbiI6bnVsbCwiZmJfbmFtZSI6ImZwdG1lZHRlY2gifQ.swHWYVkEbU2EYLVqr92tMb8xubdZ0owFTScb0s2nAyI";
 
-const REQUEST_TIMEOUT = 30_000; // 30 giây
+const REQUEST_TIMEOUT = 18_000; // 18 giây — đủ rộng nhưng không nuốt hết budget 60s nếu API treo
 const MAX_RETRIES = 3;
 
 // ----------------------------------------------------------------
@@ -178,7 +178,10 @@ const MAX_MESSAGE_PAGES = 40; // safety cap (~1200 messages/conversation)
 export async function getMessages(
   pageId: string,
   conversationId: string,
-  pageAccessToken: string
+  pageAccessToken: string,
+  // Mốc thời gian phải dừng phân trang tin nhắn — tránh 1 hội thoại nặng làm
+  // function vượt giới hạn 60s. Lần gọi sau (force) sẽ fetch tiếp.
+  deadline?: number
 ): Promise<PancakeMessagesResponse> {
   const baseUrl = `${BASE_URL}/public_api/v1/pages/${pageId}/conversations/${conversationId}/messages?page_access_token=${pageAccessToken}`;
 
@@ -196,7 +199,8 @@ export async function getMessages(
   while (
     allMessages.length > 0 &&
     count % MESSAGES_PAGE_SIZE === 0 &&
-    pageCount < MAX_MESSAGE_PAGES
+    pageCount < MAX_MESSAGE_PAGES &&
+    !(deadline && Date.now() >= deadline)
   ) {
     const res = await fetchWithRetry(`${baseUrl}&current_count=${count}`, {
       headers: { Accept: "application/json" },
