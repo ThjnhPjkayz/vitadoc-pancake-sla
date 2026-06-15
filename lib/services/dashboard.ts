@@ -423,9 +423,11 @@ export async function getConversations(
   }
 
   if (dateFrom || dateTo) {
+    // dateTo là biên trên LOẠI TRỪ (đầu ngày sau period) từ useGlobalPeriod → dùng `lt`.
+    // (Trước đây cộng thêm 1 ngày → "hôm qua" lại bao gồm cả hôm nay.)
     slaWhere.customerMessageAt = {
       ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
-      ...(dateTo ? { lte: new Date(new Date(dateTo).getTime() + 86_400_000 - 1) } : {}),
+      ...(dateTo ? { lt: new Date(dateTo) } : {}),
     };
   }
 
@@ -517,9 +519,8 @@ export async function getConversationTypeStats(
       ? {
           customerMessageAt: {
             ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
-            // dateTo là ISO đầy đủ (đã là biên trên) — parse trực tiếp.
-            // Tránh nối chuỗi "...Z" + "T23:59:59.999Z" → Invalid Date → Prisma throw 500
-            ...(dateTo ? { lte: new Date(dateTo) } : {}),
+            // dateTo là biên trên LOẠI TRỪ (đầu ngày sau period) → dùng `lt`, không cộng ngày.
+            ...(dateTo ? { lt: new Date(dateTo) } : {}),
           },
         }
       : {}),
