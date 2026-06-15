@@ -7,7 +7,9 @@ import type { SyncStats } from "@/lib/services/sync";
 import type { PancakePage } from "@/lib/types/pancake";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+// 300s như full-run/cron (tài khoản hỗ trợ). Budget xử lý vẫn 30s nên request
+// thường trả ~30s; nâng trần này để batch chậm/DB lag không bị cắt ở 60s.
+export const maxDuration = 300;
 
 export async function POST(request: Request) {
   const body = await request.json() as {
@@ -78,8 +80,8 @@ export async function POST(request: Request) {
       pageAccessToken = dbPage.pageAccessToken;
     }
 
-    // maxDuration = 60s → chừa margin lớn (30s) cho nhóm hội thoại cuối + fetch
-    // messages có thể chậm/retry, tránh 504. Phần dư tiếp tục ở request sau.
+    // Budget 30s/request để giữ tiến độ mượt + biên an toàn rất lớn dưới maxDuration 300s.
+    // Phần dư của page tiếp tục ở request sau (resume bằng cursor).
     const deadline = Date.now() + 30_000;
     const { nextCursor } = await syncConversationBatch(
       page.id,
