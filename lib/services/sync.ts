@@ -262,7 +262,7 @@ export async function syncConversationBatch(
   // Pancake hỗ trợ last_conversation_id ở vị trí bất kỳ nên lần gọi sau tiếp đúng chỗ.
   deadline?: number
 ): Promise<{ nextCursor: string | null }> {
-  const res = await getConversations(pageId, pageAccessToken, cursor);
+  const res = await getConversations(pageId, pageAccessToken, cursor, deadline);
   const conversations: PancakeConversation[] = res.conversations ?? [];
 
   if (conversations.length === 0) return { nextCursor: null };

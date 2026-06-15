@@ -157,16 +157,36 @@ function DashboardContent() {
         setSyncProgress({ currentPageName: page.name, currentPageIndex: i + 1, totalPages: pages.length, conversations: totals.conversations, messages: totals.messages, slaChecked: totals.slaChecked });
 
         // Loop cursor pages for this page until no more conversations
+        type PageJson = { success: boolean; cancelled?: boolean; stats?: { pages: { upserted: number }; conversations: { upserted: number }; messages: { upserted: number }; slaChecked: number; errors: string[] }; nextCursor?: string | null };
+        const MAX_PAGE_RETRIES = 3;
         let cursor: string | null = null;
         do {
           if (syncCancelledRef.current) { cancelled = true; break; }
 
-          const pageRes: Response = await fetch("/api/sync/page", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ syncId, pageIndex: i + 1, totalPages: pages.length, page, since, conversations: totals.conversations, messages: totals.messages, slaChecked: totals.slaChecked, cursor, force }),
-          });
-          const pageJson: { success: boolean; cancelled?: boolean; stats?: { pages: { upserted: number }; conversations: { upserted: number }; messages: { upserted: number }; slaChecked: number; errors: string[] }; nextCursor?: string | null } = await pageRes.json();
+          // Gọi /api/sync/page với retry: 1 request lỗi (vd 504) KHÔNG làm dừng cả đợt.
+          let pageJson: PageJson | null = null;
+          for (let attempt = 1; attempt <= MAX_PAGE_RETRIES; attempt++) {
+            if (syncCancelledRef.current) { cancelled = true; break; }
+            try {
+              const pageRes = await fetch("/api/sync/page", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ syncId, pageIndex: i + 1, totalPages: pages.length, page, since, conversations: totals.conversations, messages: totals.messages, slaChecked: totals.slaChecked, cursor, force }),
+              });
+              if (!pageRes.ok) throw new Error(`HTTP ${pageRes.status}`);
+              pageJson = await pageRes.json() as PageJson;
+              break;
+            } catch (err) {
+              if (attempt >= MAX_PAGE_RETRIES) {
+                totals.errors.push(`Page ${page.name} (cursor=${cursor ?? "start"}): ${String(err)}`);
+              } else {
+                await new Promise((r) => setTimeout(r, 2000));
+              }
+            }
+          }
+
+          // Thất bại sau khi retry → bỏ phần còn lại của page này, sang page kế (không dừng cả đợt)
+          if (!pageJson) break;
 
           if (pageJson.cancelled) { cancelled = true; break; }
           if (pageJson.success && pageJson.stats) {

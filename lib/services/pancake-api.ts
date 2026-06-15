@@ -28,11 +28,17 @@ const MAX_RETRIES = 3;
 async function fetchWithRetry(
   url: string,
   options: RequestInit = {},
-  retries = MAX_RETRIES
+  retries = MAX_RETRIES,
+  // Khi truyền deadline: không bắt đầu retry sau khi đã quá hạn → 1 lần gọi treo
+  // không nuốt hết budget của function (tối đa = deadline + 1 lần REQUEST_TIMEOUT).
+  deadline?: number
 ): Promise<Response> {
   let lastErr: unknown;
 
   for (let attempt = 1; attempt <= retries; attempt++) {
+    // Quá deadline rồi thì không thử lại nữa (lần đầu vẫn chạy để có dữ liệu)
+    if (attempt > 1 && deadline && Date.now() >= deadline) break;
+
     // Tạo AbortController mới cho mỗi attempt để tránh dùng signal đã abort
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
@@ -55,6 +61,7 @@ async function fetchWithRetry(
       clearTimeout(timeout);
       lastErr = err;
       if (attempt === retries) break;
+      if (deadline && Date.now() >= deadline) break;
 
       console.warn(`[PancakeAPI] Attempt ${attempt}/${retries} failed, retrying...`);
       await new Promise((r) => setTimeout(r, 1000 * attempt));
@@ -109,7 +116,8 @@ export const CONVERSATIONS_PAGE_SIZE = 60;
 export async function getConversations(
   pageId: string,
   pageAccessToken: string,
-  lastConversationId?: string
+  lastConversationId?: string,
+  deadline?: number
 ): Promise<PancakeConversationsResponse> {
   // ⚠️ Tham số cursor đúng là `last_conversation_id` — Pancake BỎ QUA `before_id`
   // (đã verify: before_id luôn trả lại trang đầu → chỉ sync được 60 hội thoại mới nhất)
@@ -118,7 +126,7 @@ export async function getConversations(
 
   const res = await fetchWithRetry(url, {
     headers: { Accept: "application/json" },
-  });
+  }, MAX_RETRIES, deadline);
 
   return res.json();
 }
@@ -186,7 +194,7 @@ export async function getMessages(
   const baseUrl = `${BASE_URL}/public_api/v1/pages/${pageId}/conversations/${conversationId}/messages?page_access_token=${pageAccessToken}`;
 
   // Lần đầu — giữ lại metadata (post, customers...) để trả về nguyên vẹn
-  const firstRes = await fetchWithRetry(baseUrl, { headers: { Accept: "application/json" } });
+  const firstRes = await fetchWithRetry(baseUrl, { headers: { Accept: "application/json" } }, MAX_RETRIES, deadline);
   const firstJson = (await firstRes.json()) as PancakeMessagesResponse;
   const allMessages = [...(firstJson.messages ?? [])];
 
@@ -204,7 +212,7 @@ export async function getMessages(
   ) {
     const res = await fetchWithRetry(`${baseUrl}&current_count=${count}`, {
       headers: { Accept: "application/json" },
-    });
+    }, MAX_RETRIES, deadline);
     const json = (await res.json()) as PancakeMessagesResponse;
     const batch = json.messages ?? [];
     if (batch.length === 0) break;
