@@ -148,7 +148,7 @@ export async function POST(request: Request) {
           break;
         }
 
-        const { nextCursor } = await syncConversationBatch(page.id, pageAccessToken, runStats, cursor, undefined, 1);
+        const { nextCursor } = await syncConversationBatch(page.id, pageAccessToken, runStats, cursor, undefined, 1, false, startTime + TIME_LIMIT_MS);
         cursor = nextCursor ?? undefined;
         if (cursor) await new Promise((r) => setTimeout(r, 800));
       } while (cursor && !timedOut);

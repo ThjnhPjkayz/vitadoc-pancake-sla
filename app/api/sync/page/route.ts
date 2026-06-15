@@ -78,6 +78,8 @@ export async function POST(request: Request) {
       pageAccessToken = dbPage.pageAccessToken;
     }
 
+    // maxDuration = 60s → chừa margin, dừng batch sau 40s rồi tiếp tục ở request sau
+    const deadline = Date.now() + 40_000;
     const { nextCursor } = await syncConversationBatch(
       page.id,
       pageAccessToken,
@@ -85,7 +87,8 @@ export async function POST(request: Request) {
       cursor ?? undefined,
       sinceDate,
       2,
-      force
+      force,
+      deadline
     );
 
     return Response.json({ success: true, stats, nextCursor });

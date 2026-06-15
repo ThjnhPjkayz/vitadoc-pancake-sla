@@ -255,7 +255,11 @@ export async function syncConversationBatch(
   cursor?: string,
   since?: Date,
   concurrency = 2,
-  forceMessages = false
+  forceMessages = false,
+  // Mốc thời gian (Date.now()) phải dừng trước — để không vượt giới hạn function.
+  // Khi chạm deadline giữa batch, trả về id hội thoại cuối đã xử lý làm cursor;
+  // Pancake hỗ trợ last_conversation_id ở vị trí bất kỳ nên lần gọi sau tiếp đúng chỗ.
+  deadline?: number
 ): Promise<{ nextCursor: string | null }> {
   const res = await getConversations(pageId, pageAccessToken, cursor);
   const conversations: PancakeConversation[] = res.conversations ?? [];
@@ -283,6 +287,14 @@ export async function syncConversationBatch(
         )
       )
     );
+
+    // Hết time budget mà vẫn còn hội thoại trong batch → dừng sớm, tiếp tục lần sau
+    const processedUpTo = i + batch.length;
+    if (deadline && Date.now() >= deadline && processedUpTo < conversations.length) {
+      const lastProcessedId = conversations[processedUpTo - 1].id;
+      console.log(`[Sync]   ⏱️ Time budget hit — resume từ ${lastProcessedId} (đã xử lý ${processedUpTo}/${conversations.length})`);
+      return { nextCursor: lastProcessedId };
+    }
   }
 
   const lastId = conversations[conversations.length - 1].id;
