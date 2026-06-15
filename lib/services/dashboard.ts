@@ -517,7 +517,9 @@ export async function getConversationTypeStats(
       ? {
           customerMessageAt: {
             ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
-            ...(dateTo ? { lte: new Date(dateTo + "T23:59:59.999Z") } : {}),
+            // dateTo là ISO đầy đủ (đã là biên trên) — parse trực tiếp.
+            // Tránh nối chuỗi "...Z" + "T23:59:59.999Z" → Invalid Date → Prisma throw 500
+            ...(dateTo ? { lte: new Date(dateTo) } : {}),
           },
         }
       : {}),
