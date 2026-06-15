@@ -83,16 +83,29 @@ export async function POST(request: Request) {
     // Budget 20s/request + concurrency 1 → deadline được kiểm tra sau MỖI hội thoại,
     // giảm áp lực connection DB. Biên an toàn rất lớn dưới maxDuration 300s.
     const deadline = Date.now() + 20_000;
-    const { nextCursor } = await syncConversationBatch(
-      page.id,
-      pageAccessToken,
-      stats,
-      cursor ?? undefined,
-      sinceDate,
-      1,
-      force,
-      deadline
-    );
+
+    // 🛡️ Lưới chặn cứng: dù bất kỳ thao tác nào treo, request VẪN phản hồi sau 50s.
+    // Khi chạm mốc này → trả nextCursor=null (bỏ phần còn lại của page, client sang
+    // page kế); phần chưa xử lý sẽ được sync bù ở lần sau. Function không bao giờ 504.
+    const HARD_LIMIT_MS = 50_000;
+    const { nextCursor } = await Promise.race([
+      syncConversationBatch(
+        page.id,
+        pageAccessToken,
+        stats,
+        cursor ?? undefined,
+        sinceDate,
+        1,
+        force,
+        deadline
+      ),
+      new Promise<{ nextCursor: string | null }>((resolve) =>
+        setTimeout(() => {
+          stats.errors.push(`Page ${page.name}: hard limit 50s — bỏ qua phần còn lại của page`);
+          resolve({ nextCursor: null });
+        }, HARD_LIMIT_MS)
+      ),
+    ]);
 
     return Response.json({ success: true, stats, nextCursor });
   } catch (err) {
