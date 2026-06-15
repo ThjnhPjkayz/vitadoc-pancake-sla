@@ -266,12 +266,15 @@ export async function syncConversationBatch(
 
   if (conversations.length === 0) return { nextCursor: null };
 
-  // Incremental: stop if entire batch is older than since
-  if (since) {
-    const hasNew = conversations.some(
-      (c) => !c.updated_at || new Date(c.updated_at + "+07:00") >= since
-    );
-    if (!hasNew) return { nextCursor: null };
+  // Danh sách hội thoại Pancake sắp xếp theo updated_at GIẢM DẦN (đã verify trên
+  // page 2635 hội thoại: 0 vi phạm thứ tự). Nhờ vậy:
+  //  - Lọc since theo TỪNG hội thoại để không lưu hội thoại ngoài cửa sổ.
+  //  - Khi cả batch (60) đều cũ hơn since → mọi hội thoại sau cũng cũ → dừng sớm.
+  const isRecent = (c: PancakeConversation) =>
+    !since || !c.updated_at || new Date(c.updated_at + "+07:00") >= since;
+
+  if (since && !conversations.some(isRecent)) {
+    return { nextCursor: null };
   }
 
   console.log(
@@ -279,17 +282,20 @@ export async function syncConversationBatch(
   );
 
   for (let i = 0; i < conversations.length; i += concurrency) {
-    const batch = conversations.slice(i, i + concurrency);
-    await Promise.allSettled(
-      batch.map((conv) =>
-        syncSingleConversation(pageId, pageAccessToken!, conv, stats, forceMessages).catch(
-          (err) => stats.errors.push(`Conv ${conv.id}: ${String(err)}`)
+    const batch = conversations.slice(i, i + concurrency).filter(isRecent);
+    if (batch.length > 0) {
+      await Promise.allSettled(
+        batch.map((conv) =>
+          syncSingleConversation(pageId, pageAccessToken!, conv, stats, forceMessages).catch(
+            (err) => stats.errors.push(`Conv ${conv.id}: ${String(err)}`)
+          )
         )
-      )
-    );
+      );
+    }
 
-    // Hết time budget mà vẫn còn hội thoại trong batch → dừng sớm, tiếp tục lần sau
-    const processedUpTo = i + batch.length;
+    // Hết time budget mà vẫn còn hội thoại trong batch → dừng sớm, tiếp tục lần sau.
+    // Dùng kích thước slice GỐC (không phải batch đã lọc) để cursor advance đúng.
+    const processedUpTo = Math.min(i + concurrency, conversations.length);
     if (deadline && Date.now() >= deadline && processedUpTo < conversations.length) {
       const lastProcessedId = conversations[processedUpTo - 1].id;
       console.log(`[Sync]   ⏱️ Time budget hit — resume từ ${lastProcessedId} (đã xử lý ${processedUpTo}/${conversations.length})`);
