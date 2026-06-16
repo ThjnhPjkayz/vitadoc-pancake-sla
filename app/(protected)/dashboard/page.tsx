@@ -14,10 +14,8 @@ import { useI18n } from "@/lib/i18n";
 import { useGlobalPeriod } from "@/hooks/use-global-period";
 
 import StatsCards from "@/components/dashboard/stats-cards";
-import ViolationsTrendChart, { type ChartPeriod } from "@/components/dashboard/violations-trend-chart";
-import ResponseTimeTrendChart from "@/components/dashboard/response-time-trend-chart";
 
-import type { DashboardStats, PeriodComparison, ViolationsTrendDay, ResponseTimeTrendDay } from "@/lib/services/dashboard";
+import type { DashboardStats, PeriodComparison } from "@/lib/services/dashboard";
 
 function DashboardContent() {
   const { t } = useI18n();
@@ -26,11 +24,6 @@ function DashboardContent() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [comparison, setComparison] = useState<PeriodComparison | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
-
-  const [trendData, setTrendData] = useState<ViolationsTrendDay[]>([]);
-  const [trendLoading, setTrendLoading] = useState(true);
-  const [responseTimeTrendData, setResponseTimeTrendData] = useState<ResponseTimeTrendDay[]>([]);
-  const [responseTimeTrendLoading, setResponseTimeTrendLoading] = useState(true);
 
   const [syncing, setSyncing] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
@@ -74,28 +67,6 @@ function DashboardContent() {
     }
   }, [buildPeriodQuery]);
 
-  const fetchTrend = useCallback(async () => {
-    setTrendLoading(true);
-    setResponseTimeTrendLoading(true);
-    try {
-      const q = buildPeriodQuery();
-      const [violationsRes, responseTimeRes] = await Promise.all([
-        fetch(`/api/dashboard/violations-trend?${q}`),
-        fetch(`/api/dashboard/response-time-trend?${q}`),
-      ]);
-      const [violationsJson, responseTimeJson] = await Promise.all([
-        violationsRes.json(),
-        responseTimeRes.json(),
-      ]);
-      if (violationsJson.success) setTrendData(violationsJson.trend);
-      if (responseTimeJson.success) setResponseTimeTrendData(responseTimeJson.trend);
-    } catch (err) {
-      console.error("Failed to fetch trend:", err);
-    } finally {
-      setTrendLoading(false);
-      setResponseTimeTrendLoading(false);
-    }
-  }, [buildPeriodQuery]);
 
   const checkSyncStatus = useCallback(async (): Promise<"running" | "success" | "failed" | "cancelled" | null> => {
     try {
@@ -218,7 +189,6 @@ function DashboardContent() {
       } else {
         setSyncResult({ type: "success", message: t.dashboard.syncSuccess });
         fetchStats();
-        fetchTrend();
       }
     } catch (err) {
       setSyncing(false);
@@ -232,7 +202,7 @@ function DashboardContent() {
       }
       setSyncResult({ type: "error", message: t.dashboard.cannotConnect });
     }
-  }, [syncing, t, fetchStats, fetchTrend]);
+  }, [syncing, t, fetchStats]);
 
   const handleStopSync = useCallback(async () => {
     syncCancelledRef.current = true;
@@ -255,7 +225,6 @@ function DashboardContent() {
 
   useEffect(() => {
     fetchStats();
-    fetchTrend();
     checkSyncStatus().then((status) => {
       if (status === "running") {
         isExternalSyncRef.current = true;
@@ -275,17 +244,15 @@ function DashboardContent() {
         setSyncProgress(null);
         if (status === "success") {
           fetchStats();
-          fetchTrend();
         }
       }
     }, 5000);
     return () => clearInterval(interval);
-  }, [syncing, checkSyncStatus, fetchStats, fetchTrend]);
+  }, [syncing, checkSyncStatus, fetchStats]);
 
   // Refetch khi global period thay đổi
   useEffect(() => {
     fetchStats();
-    fetchTrend();
   }, [globalPeriod.period, globalPeriod.fromParam, globalPeriod.toParam]);
 
   return (
@@ -337,7 +304,7 @@ function DashboardContent() {
               </Button>
             )
           )}
-          <Button variant="outline" onClick={() => { fetchStats(); fetchTrend(); }}>
+          <Button variant="outline" onClick={() => { fetchStats(); }}>
             <RefreshCw className="w-4 h-4" />
             {t.common.refresh}
           </Button>
@@ -409,20 +376,6 @@ function DashboardContent() {
           ))}
         </div>
       )}
-
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ViolationsTrendChart
-          data={trendData}
-          loading={trendLoading}
-          period={globalPeriod.period as ChartPeriod}
-        />
-        <ResponseTimeTrendChart
-          data={responseTimeTrendData}
-          loading={responseTimeTrendLoading}
-          period={globalPeriod.period as ChartPeriod}
-        />
-      </div>
     </div>
   );
 }
