@@ -58,30 +58,6 @@ function RankBadge({ rank }: { rank: number }) {
   );
 }
 
-function LateRateBar({ rate }: { rate: number }) {
-  const pct = Math.round(rate * 100);
-  const color =
-    pct >= 50 ? "bg-red-500" : pct >= 25 ? "bg-amber-400" : "bg-emerald-500";
-
-  return (
-    <div className="flex items-center gap-2 min-w-[110px]">
-      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-        <div
-          className={`h-full rounded-full ${color} transition-all`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <span
-        className={`text-xs font-semibold tabular-nums w-9 text-right ${
-          pct >= 50 ? "text-red-600" : pct >= 25 ? "text-amber-600" : "text-emerald-600"
-        }`}
-      >
-        {pct}%
-      </span>
-    </div>
-  );
-}
-
 export default function PageLeaderboard({
   pages,
   loading,
@@ -129,11 +105,10 @@ export default function PageLeaderboard({
             <TableHead className="w-8 text-xs font-semibold uppercase tracking-wider">{t.pages.col.rank}</TableHead>
             <TableHead className="text-xs font-semibold uppercase tracking-wider">{t.pages.col.page}</TableHead>
             <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">{t.pages.col.total}</TableHead>
-            <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">{t.pages.col.late}</TableHead>
-            <TableHead className="text-xs font-semibold uppercase tracking-wider text-right text-emerald-700">{t.pages.col.onTime}</TableHead>
-            <TableHead className="text-xs font-semibold uppercase tracking-wider min-w-[140px]">{t.pages.col.lateRate}</TableHead>
-            <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">{t.pages.col.avgInbox}</TableHead>
-            <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">{t.pages.col.avgComment}</TableHead>
+            <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">{t.pages.col.lateInbox}</TableHead>
+            <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">{t.pages.col.lateComment}</TableHead>
+            <TableHead className="text-xs font-semibold uppercase tracking-wider text-right text-emerald-700">{t.pages.col.onTimeInbox}</TableHead>
+            <TableHead className="text-xs font-semibold uppercase tracking-wider text-right text-emerald-700">{t.pages.col.onTimeComment}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -164,23 +139,24 @@ export default function PageLeaderboard({
                 {page.total.toLocaleString("en-US")}
               </TableCell>
               <TableCell className="text-right">
-                <span className={`text-base font-semibold tabular-nums ${page.lateCount > 0 ? "text-red-600" : "text-muted-foreground"}`}>
-                  {page.lateCount.toLocaleString("en-US")}
+                <span className={`text-base font-semibold tabular-nums ${page.lateInboxCount > 0 ? "text-red-600" : "text-muted-foreground"}`}>
+                  {page.lateInboxCount.toLocaleString("en-US")}
                 </span>
               </TableCell>
               <TableCell className="text-right">
-                <span className={`text-base tabular-nums ${page.onTimeCount > 0 ? "text-emerald-600 font-medium" : "text-muted-foreground"}`}>
-                  {page.onTimeCount.toLocaleString("en-US")}
+                <span className={`text-base font-semibold tabular-nums ${page.lateCommentCount > 0 ? "text-red-600" : "text-muted-foreground"}`}>
+                  {page.lateCommentCount.toLocaleString("en-US")}
                 </span>
               </TableCell>
-              <TableCell>
-                <LateRateBar rate={page.lateRate} />
+              <TableCell className="text-right">
+                <span className={`text-base tabular-nums ${page.onTimeInboxCount > 0 ? "text-emerald-600 font-medium" : "text-muted-foreground"}`}>
+                  {page.onTimeInboxCount.toLocaleString("en-US")}
+                </span>
               </TableCell>
-              <TableCell className="text-base text-right tabular-nums text-muted-foreground">
-                {page.avgInboxResponseTimeMinutes > 0 ? `${page.avgInboxResponseTimeMinutes}m` : "—"}
-              </TableCell>
-              <TableCell className="text-base text-right tabular-nums text-muted-foreground">
-                {page.avgCommentResponseTimeMinutes > 0 ? `${page.avgCommentResponseTimeMinutes}m` : "—"}
+              <TableCell className="text-right">
+                <span className={`text-base tabular-nums ${page.onTimeCommentCount > 0 ? "text-emerald-600 font-medium" : "text-muted-foreground"}`}>
+                  {page.onTimeCommentCount.toLocaleString("en-US")}
+                </span>
               </TableCell>
             </TableRow>
           ))}

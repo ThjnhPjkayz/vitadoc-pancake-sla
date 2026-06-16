@@ -100,6 +100,10 @@ export interface PageSummary {
   platform: string;
   total: number;
   lateCount: number;
+  lateInboxCount: number;
+  lateCommentCount: number;
+  onTimeInboxCount: number;
+  onTimeCommentCount: number;
   pendingCount: number;         // all unreplied (used for onTimeCount)
   pendingBreachedCount: number; // unreplied AND past SLA threshold
   onTimeCount: number;
@@ -314,6 +318,10 @@ export async function getPageSummaries(dateFrom?: Date, dateTo?: Date): Promise<
       platform: string;
       total: bigint;
       lateCount: bigint;
+      lateInboxCount: bigint;
+      lateCommentCount: bigint;
+      onTimeInboxCount: bigint;
+      onTimeCommentCount: bigint;
       pendingCount: bigint;
       pendingBreachedCount: bigint;
       avgResponseTimeMinutes: number | null;
@@ -327,6 +335,10 @@ export async function getPageSummaries(dateFrom?: Date, dateTo?: Date): Promise<
       p.platform,
       COUNT(CASE WHEN s."slaStatus" != 'outbound' THEN 1 END)       AS total,
       SUM(CASE WHEN s."isLateReply" = true THEN 1 ELSE 0 END)       AS "lateCount",
+      SUM(CASE WHEN s."isLateReply" = true AND s."conversationType" = 'INBOX'   THEN 1 ELSE 0 END) AS "lateInboxCount",
+      SUM(CASE WHEN s."isLateReply" = true AND s."conversationType" = 'COMMENT' THEN 1 ELSE 0 END) AS "lateCommentCount",
+      COUNT(CASE WHEN s."slaStatus" = 'on-time' AND s."conversationType" = 'INBOX'   THEN 1 END)   AS "onTimeInboxCount",
+      COUNT(CASE WHEN s."slaStatus" = 'on-time' AND s."conversationType" = 'COMMENT' THEN 1 END)   AS "onTimeCommentCount",
       COUNT(CASE WHEN s."responseTimeMinutes" IS NULL
                       AND s."slaStatus" != 'outbound'
                  THEN 1 END)                                         AS "pendingCount",
@@ -361,6 +373,10 @@ export async function getPageSummaries(dateFrom?: Date, dateTo?: Date): Promise<
         platform: r.platform,
         total,
         lateCount,
+        lateInboxCount: Number(r.lateInboxCount),
+        lateCommentCount: Number(r.lateCommentCount),
+        onTimeInboxCount: Number(r.onTimeInboxCount),
+        onTimeCommentCount: Number(r.onTimeCommentCount),
         pendingCount,
         pendingBreachedCount,
         onTimeCount,
