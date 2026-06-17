@@ -78,6 +78,8 @@ const vi: Messages = {
       rank: "#",
       page: "Trang",
       total: "Tổng",
+      inbox: "Inbox",
+      comment: "Comment",
       late: "Trễ",
       onTime: "Đúng hạn",
       lateInbox: "Trễ Inbox",

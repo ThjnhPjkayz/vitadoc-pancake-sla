@@ -99,6 +99,8 @@ export interface PageSummary {
   pageName: string;
   platform: string;
   total: number;
+  inboxConvCount: number;   // số hội thoại INBOX (khách chủ động) trong kỳ
+  commentConvCount: number; // số hội thoại COMMENT trong kỳ
   lateCount: number;
   lateInboxCount: number;
   lateCommentCount: number;
@@ -317,6 +319,8 @@ export async function getPageSummaries(dateFrom?: Date, dateTo?: Date): Promise<
       pageName: string;
       platform: string;
       total: bigint;
+      inboxConvCount: bigint;
+      commentConvCount: bigint;
       lateCount: bigint;
       lateInboxCount: bigint;
       lateCommentCount: bigint;
@@ -334,6 +338,8 @@ export async function getPageSummaries(dateFrom?: Date, dateTo?: Date): Promise<
       p.name                                                         AS "pageName",
       p.platform,
       COUNT(CASE WHEN s."slaStatus" != 'outbound' THEN 1 END)       AS total,
+      COUNT(CASE WHEN s."slaStatus" != 'outbound' AND s."conversationType" = 'INBOX'   THEN 1 END) AS "inboxConvCount",
+      COUNT(CASE WHEN s."slaStatus" != 'outbound' AND s."conversationType" = 'COMMENT' THEN 1 END) AS "commentConvCount",
       SUM(CASE WHEN s."isLateReply" = true THEN 1 ELSE 0 END)       AS "lateCount",
       SUM(CASE WHEN s."isLateReply" = true AND s."conversationType" = 'INBOX'   THEN 1 ELSE 0 END) AS "lateInboxCount",
       SUM(CASE WHEN s."isLateReply" = true AND s."conversationType" = 'COMMENT' THEN 1 ELSE 0 END) AS "lateCommentCount",
@@ -372,6 +378,8 @@ export async function getPageSummaries(dateFrom?: Date, dateTo?: Date): Promise<
         pageName: r.pageName,
         platform: r.platform,
         total,
+        inboxConvCount: Number(r.inboxConvCount),
+        commentConvCount: Number(r.commentConvCount),
         lateCount,
         lateInboxCount: Number(r.lateInboxCount),
         lateCommentCount: Number(r.lateCommentCount),

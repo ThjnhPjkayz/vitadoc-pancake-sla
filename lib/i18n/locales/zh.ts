@@ -76,6 +76,8 @@ const zh = {
       rank: "#",
       page: "主页",
       total: "总计",
+      inbox: "私信",
+      comment: "评论",
       late: "超时",
       onTime: "按时",
       lateInbox: "超时(收件箱)",

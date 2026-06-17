@@ -76,6 +76,8 @@ const en = {
       rank: "#",
       page: "Page",
       total: "Total",
+      inbox: "Inbox",
+      comment: "Comment",
       late: "Late",
       onTime: "On-time",
       lateInbox: "Late Inbox",
