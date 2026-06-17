@@ -102,7 +102,9 @@ export async function POST(request: Request) {
   };
 
   const startTime = Date.now();
-  const TIME_LIMIT_MS = 240_000;
+  // 200s (không phải 240s): chừa biên ~100s dưới maxDuration 300s. Một batch lỡ bắt
+  // đầu sát ngưỡng vẫn còn đủ chỗ cho getConversations + 1 hội thoại nặng trước 300s.
+  const TIME_LIMIT_MS = 200_000;
   let timedOut = false;
 
   // Lọc pages chưa xong
