@@ -85,6 +85,7 @@ const en = {
       inbox: "Inbox",
       activeReply: "Active Cust.",
       friendedZalo: "Zalo Friended",
+      friendedZaloHint: "* Cumulative total — not affected by the period filter (tags have no timestamp)",
       comment: "Comment",
       late: "Late",
       onTime: "On-time",

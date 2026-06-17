@@ -87,6 +87,7 @@ const vi: Messages = {
       inbox: "Inbox",
       activeReply: "KH tích cực",
       friendedZalo: "Đã kết bạn Zalo",
+      friendedZaloHint: "* Tổng tích luỹ — không đổi theo bộ lọc kỳ (tag không có thời điểm)",
       comment: "Comment",
       late: "Trễ",
       onTime: "Đúng hạn",

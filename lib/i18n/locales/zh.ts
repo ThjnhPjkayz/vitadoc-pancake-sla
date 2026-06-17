@@ -85,6 +85,7 @@ const zh = {
       inbox: "私信",
       activeReply: "活跃客户",
       friendedZalo: "已加Zalo好友",
+      friendedZaloHint: "* 累计总数 — 不受周期筛选影响（标签无时间戳）",
       comment: "评论",
       late: "超时",
       onTime: "按时",
