@@ -367,11 +367,14 @@ function DashboardContent() {
           inHoursViolations={stats.inHoursViolations}
           afterHoursViolations={stats.afterHoursViolations}
           slaSuccessRate={stats.slaSuccessRate}
+          responseRate={stats.responseRate}
+          friendedZaloCount={stats.friendedZaloCount}
+          activeReplyCount={stats.activeReplyCount}
           comparison={comparison ?? undefined}
         />
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-          {Array.from({ length: 5 }).map((_, i) => (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 8 }).map((_, i) => (
             <div key={i} className="h-24 rounded-xl bg-zinc-100 animate-pulse" />
           ))}
         </div>

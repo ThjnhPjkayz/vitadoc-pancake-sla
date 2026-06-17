@@ -1,6 +1,6 @@
 "use client";
 
-import { Timer, AlertTriangle, CheckCircle, Clock, Moon, TrendingUp, TrendingDown } from "lucide-react";
+import { Timer, AlertTriangle, CheckCircle, Clock, Moon, MessageSquareReply, UserPlus, Repeat, TrendingUp, TrendingDown } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import type { PeriodComparison } from "@/lib/services/dashboard";
 
@@ -10,6 +10,9 @@ interface StatsCardsProps {
   inHoursViolations: number;
   afterHoursViolations: number;
   slaSuccessRate: number;
+  responseRate: number;
+  friendedZaloCount: number;
+  activeReplyCount: number;
   comparison?: PeriodComparison;
 }
 
@@ -55,6 +58,9 @@ export default function StatsCards({
   inHoursViolations,
   afterHoursViolations,
   slaSuccessRate,
+  responseRate,
+  friendedZaloCount,
+  activeReplyCount,
   comparison,
 }: StatsCardsProps) {
   const { t } = useI18n();
@@ -114,10 +120,40 @@ export default function StatsCards({
       iconBg: "bg-rose-50",
       accent: "#e11d48",
     },
+    {
+      label: t.stats.responseRate,
+      sub: t.stats.responseRateSub,
+      value: `${(responseRate * 100).toFixed(1)}%`,
+      delta: null,
+      icon: MessageSquareReply,
+      iconColor: "text-teal-600",
+      iconBg: "bg-teal-50",
+      accent: "#0d9488",
+    },
+    {
+      label: t.stats.friendedZalo,
+      sub: t.stats.friendedZaloSub,
+      value: friendedZaloCount.toLocaleString("en-US"),
+      delta: null,
+      icon: UserPlus,
+      iconColor: "text-violet-600",
+      iconBg: "bg-violet-50",
+      accent: "#7c3aed",
+    },
+    {
+      label: t.stats.activeReply,
+      sub: t.stats.activeReplySub,
+      value: activeReplyCount.toLocaleString("en-US"),
+      delta: null,
+      icon: Repeat,
+      iconColor: "text-sky-600",
+      iconBg: "bg-sky-50",
+      accent: "#0284c7",
+    },
   ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
       {cards.map((card) => (
         <div
           key={card.label}

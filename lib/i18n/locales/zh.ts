@@ -60,6 +60,12 @@ const zh = {
     afterHoursSub: "18:00 – 08:00",
     pendingSLA: "待处理 > SLA",
     pendingSLASub: "收件箱 >15分钟 · 评论 >60分钟",
+    responseRate: "回复率",
+    responseRateSub: "有管理员回复的对话",
+    friendedZalo: "已加Zalo好友客户",
+    friendedZaloSub: "累计总数",
+    activeReply: "活跃客户",
+    activeReplySub: "收件箱 · ≥2次往来",
   },
   pages: {
     title: "主页",

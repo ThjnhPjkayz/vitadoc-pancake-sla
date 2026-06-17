@@ -38,6 +38,9 @@ export interface DashboardStats {
   pendingCount: number;
   pendingBreachedCount: number;
   pagesAtLimit: number;
+  responseRate: number;        // 0–1: hội thoại có admin trả lời / tổng (loại outbound)
+  friendedZaloCount: number;   // tổng KH đã kết bạn Zalo (tag "Đã kết bạn") — tích luỹ
+  activeReplyCount: number;    // tổng KH reply tích cực (inbox, ≥2 lượt qua lại) — tích luỹ
 }
 
 export interface ConversationFilter {
@@ -182,9 +185,45 @@ export async function getDashboardStats(
     `SELECT COUNT(*) as count FROM (SELECT "pageId", COUNT(*) as cnt FROM "Conversation" GROUP BY "pageId" HAVING COUNT(*) = 60) sub`
   ).then((r) => Number(r[0].count));
 
+  const pageSql = pageId ? Prisma.sql`AND "pageId" = ${pageId}` : Prisma.sql``;
+  const pageSqlS = pageId ? Prisma.sql`AND s."pageId" = ${pageId}` : Prisma.sql``;
+
+  // KH đã kết bạn Zalo (tag "Đã kết bạn") — distinct customerId, tích luỹ
+  const friendedRows = await prisma.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
+    SELECT COUNT(DISTINCT "customerId") AS count
+    FROM "Conversation"
+    WHERE "customerId" IS NOT NULL AND 'Đã kết bạn' = ANY("tags") ${pageSql}
+  `);
+
+  // KH reply tích cực (inbox: khách nhắn SAU phản hồi đầu của admin) — distinct, tích luỹ
+  const activeReplyRows = await prisma.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
+    SELECT COUNT(DISTINCT c."customerId") AS count
+    FROM "SLAViolation" s
+    JOIN "Conversation" c ON c.id = s."conversationId"
+    JOIN LATERAL (
+      SELECT MAX(m."insertedAt") FILTER (WHERE m."isFromCustomer") AS last_cust,
+             MIN(m."insertedAt") FILTER (WHERE m."isFromAdmin")    AS first_admin
+      FROM "Message" m
+      WHERE m."conversationId" = s."conversationId"
+    ) act ON true
+    WHERE s."conversationType" = 'INBOX'
+      AND c."customerId" IS NOT NULL
+      AND act.last_cust IS NOT NULL
+      AND act.first_admin IS NOT NULL
+      AND act.last_cust > act.first_admin
+      ${pageSqlS}
+  `);
+
+  const friendedZaloCount = Number(friendedRows[0]?.count ?? 0);
+  const activeReplyCount = Number(activeReplyRows[0]?.count ?? 0);
+
   const totalSLA = slaAgg._count.id;
   const lateReply = slaGrouped.find((g) => g.isLateReply)?._count.id ?? 0;
   const onTime = slaGrouped.find((g) => !g.isLateReply)?._count.id ?? 0;
+
+  // Tỷ lệ được trả lời: answered (đã có reply) / tổng non-outbound (answered + pending)
+  const answerableTotal = totalSLA + pendingCount;
+  const responseRate = answerableTotal > 0 ? totalSLA / answerableTotal : 0;
 
   return {
     totalPages,
@@ -200,6 +239,9 @@ export async function getDashboardStats(
     pendingCount,
     pendingBreachedCount,
     pagesAtLimit,
+    responseRate,
+    friendedZaloCount,
+    activeReplyCount,
   };
 }
 

@@ -62,6 +62,12 @@ const vi: Messages = {
     afterHoursSub: "18:00 – 08:00",
     pendingSLA: "Đang chờ > SLA",
     pendingSLASub: "Inbox >15 phút · Bình luận >60 phút",
+    responseRate: "Tỉ lệ được trả lời",
+    responseRateSub: "Hội thoại có admin phản hồi",
+    friendedZalo: "KH đã kết bạn Zalo",
+    friendedZaloSub: "Tổng tích luỹ",
+    activeReply: "KH reply tích cực",
+    activeReplySub: "Inbox · ≥2 lượt qua lại",
   },
   pages: {
     title: "Trang",

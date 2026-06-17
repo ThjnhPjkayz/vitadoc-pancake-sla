@@ -60,6 +60,12 @@ const en = {
     afterHoursSub: "18:00 – 08:00",
     pendingSLA: "Pending > SLA",
     pendingSLASub: "Inbox >15m · Comment >60m",
+    responseRate: "Response Rate",
+    responseRateSub: "Conversations with admin reply",
+    friendedZalo: "Zalo Friended Cust.",
+    friendedZaloSub: "Cumulative total",
+    activeReply: "Active Customers",
+    activeReplySub: "Inbox · ≥2 back-and-forth",
   },
   pages: {
     title: "Pages",
