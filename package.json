@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 4000",
-    "build": "prisma generate && prisma migrate deploy && next build",
+    "build": "prisma generate && prisma db execute --schema ./prisma/schema.prisma --file ./prisma/migrations/20260617000000_add_conversation_tags/migration.sql && next build",
     "start": "next start -p ${PORT:-3000}",
     "lint": "eslint",
     "create-user": "npx tsx scripts/create-user.ts"
