@@ -107,7 +107,6 @@ export interface PageSummary {
   inboxConvCount: number;   // số hội thoại INBOX (khách chủ động) trong kỳ
   commentConvCount: number; // số hội thoại COMMENT trong kỳ
   activeReplyInboxCount: number; // số khách reply tích cực (≥2 lượt qua lại) với inbox
-  friendedZaloCount: number; // số KH đã kết bạn Zalo (tag "Đã kết bạn") — tổng, không lọc kỳ
   lateCount: number;
   lateInboxCount: number;
   lateCommentCount: number;
@@ -434,17 +433,6 @@ export async function getPageSummaries(dateFrom?: Date, dateTo?: Date): Promise<
   `);
   const activeMap = new Map(activeRows.map((r) => [r.pageId, Number(r.activeReplyCount)]));
 
-  // KH đã kết bạn Zalo: đếm distinct customerId có tag "Đã kết bạn".
-  // Đây là trạng thái cố định nên KHÔNG lọc theo kỳ (đếm tổng tích luỹ).
-  const friendedRows = await prisma.$queryRaw<Array<{ pageId: string; friendedCount: bigint }>>(Prisma.sql`
-    SELECT "pageId", COUNT(DISTINCT "customerId") AS "friendedCount"
-    FROM "Conversation"
-    WHERE "customerId" IS NOT NULL
-      AND 'Đã kết bạn' = ANY("tags")
-    GROUP BY "pageId"
-  `);
-  const friendedMap = new Map(friendedRows.map((r) => [r.pageId, Number(r.friendedCount)]));
-
   return rows
     .map((r) => {
       const total = Number(r.total);
@@ -461,7 +449,6 @@ export async function getPageSummaries(dateFrom?: Date, dateTo?: Date): Promise<
         inboxConvCount: Number(r.inboxConvCount),
         commentConvCount: Number(r.commentConvCount),
         activeReplyInboxCount: activeMap.get(r.pageId) ?? 0,
-        friendedZaloCount: friendedMap.get(r.pageId) ?? 0,
         lateCount,
         lateInboxCount: Number(r.lateInboxCount),
         lateCommentCount: Number(r.lateCommentCount),
