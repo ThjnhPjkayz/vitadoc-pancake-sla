@@ -60,9 +60,12 @@ export async function calculateSLAForConversation(
     },
   });
 
-  const firstCustomerMsg = messages.find((m) => m.isFromCustomer);
+  // Đo theo LƯỢT MỚI NHẤT: anchor là tin nhắn khách cuối cùng trong hội thoại,
+  // không phải tin đầu tiên. Nhờ vậy khi khách nhắn lại (sau khi đã được trả lời),
+  // SLA reset và phản ánh đúng trạng thái lượt trao đổi mới nhất.
+  const lastCustomerMsg = messages.filter((m) => m.isFromCustomer).at(-1);
 
-  if (!firstCustomerMsg?.insertedAt) {
+  if (!lastCustomerMsg?.insertedAt) {
     const hasAdminMessages = messages.some((m) => m.isFromAdmin);
     return saveAndReturn({
       conversationId,
@@ -82,18 +85,19 @@ export async function calculateSLAForConversation(
   }
 
   const outsideBH = isOutsideBusinessHours(
-    firstCustomerMsg.insertedAt,
+    lastCustomerMsg.insertedAt,
     timezone,
     config.businessHours
   );
 
   const threshold = getThresholdByType(convType, outsideBH, config);
 
+  // Reply = tin admin đầu tiên SAU tin khách cuối cùng (messages đã sort tăng dần)
   const firstAdminReply = messages.find(
     (m) =>
       m.isFromAdmin &&
       m.insertedAt &&
-      m.insertedAt > firstCustomerMsg.insertedAt!
+      m.insertedAt > lastCustomerMsg.insertedAt!
   );
 
   if (!firstAdminReply?.insertedAt) {
@@ -102,8 +106,8 @@ export async function calculateSLAForConversation(
       pageId,
       convType,
       threshold,
-      customerMessageId: firstCustomerMsg.id,
-      customerMessageAt: firstCustomerMsg.insertedAt,
+      customerMessageId: lastCustomerMsg.id,
+      customerMessageAt: lastCustomerMsg.insertedAt,
       adminReplyMessageId: null,
       adminReplyAt: null,
       responseTimeMinutes: null,
@@ -116,11 +120,11 @@ export async function calculateSLAForConversation(
 
   const responseTimeMs =
     firstAdminReply.insertedAt.getTime() -
-    firstCustomerMsg.insertedAt.getTime();
+    lastCustomerMsg.insertedAt.getTime();
   const responseTimeMinutes = Math.round(responseTimeMs / 60_000);
 
   const effectiveResponseMinutes = calculateWorkingMinutes(
-    firstCustomerMsg.insertedAt,
+    lastCustomerMsg.insertedAt,
     firstAdminReply.insertedAt,
     timezone,
     config.businessHours
@@ -134,8 +138,8 @@ export async function calculateSLAForConversation(
     pageId,
     convType,
     threshold,
-    customerMessageId: firstCustomerMsg.id,
-    customerMessageAt: firstCustomerMsg.insertedAt,
+    customerMessageId: lastCustomerMsg.id,
+    customerMessageAt: lastCustomerMsg.insertedAt,
     adminReplyMessageId: firstAdminReply.id,
     adminReplyAt: firstAdminReply.insertedAt,
     responseTimeMinutes,

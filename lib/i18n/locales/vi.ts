@@ -80,6 +80,7 @@ const vi: Messages = {
       total: "Tổng",
       inbox: "Inbox",
       activeReply: "KH tích cực",
+      friendedZalo: "Đã kết bạn Zalo",
       comment: "Comment",
       late: "Trễ",
       onTime: "Đúng hạn",

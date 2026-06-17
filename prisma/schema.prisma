@@ -54,6 +54,9 @@ model Conversation {
   customerName     String?
   customerUsername String?
 
+  // Tag từ Pancake (lưu theo TEXT, vd "Đã kết bạn") — ID tag cục bộ theo page nên không dùng
+  tags             String[] @default([])
+
   // Thông tin người gửi cuối
   lastSentById     String?
   lastSentByName   String?
@@ -79,6 +82,7 @@ model Conversation {
   @@index([customerId])
   @@index([insertedAt])
   @@index([seen])
+  @@index([tags], type: Gin)
 }
 
 // ============================================================

@@ -109,10 +109,21 @@ export interface PancakeConversationPhoneNumber {
   status: number;
 }
 
+export interface PancakeTag {
+  id: number;
+  text: string;
+  color?: string;
+  lighten_color?: string;
+  description?: string;
+  is_lead_event?: boolean;
+}
+
 export interface PancakeConversation {
   id: string; // conversation_id
   type: "INBOX" | "COMMENT";
-  tags: (string | null)[];
+  // ⚠️ Pancake trả về mảng OBJECT tag (kèm cả phần tử null), KHÔNG phải string/ID.
+  // Tên tag nằm ở `.text`; ID tag là cục bộ theo từng page nên match phải theo text.
+  tags: (PancakeTag | null)[];
   seen: boolean;
   from: PancakeConversationFrom;
   snippet: string;

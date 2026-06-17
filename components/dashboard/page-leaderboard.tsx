@@ -107,6 +107,7 @@ export default function PageLeaderboard({
             <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">{t.pages.col.total}</TableHead>
             <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">{t.pages.col.inbox}</TableHead>
             <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">{t.pages.col.activeReply}</TableHead>
+            <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">{t.pages.col.friendedZalo}</TableHead>
             <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">{t.pages.col.comment}</TableHead>
             <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">{t.pages.col.lateInbox}</TableHead>
             <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">{t.pages.col.lateComment}</TableHead>
@@ -146,6 +147,15 @@ export default function PageLeaderboard({
                 <span className={`text-base tabular-nums ${page.activeReplyInboxCount > 0 ? "text-sky-600 font-medium" : "text-muted-foreground"}`}>
                   {page.activeReplyInboxCount.toLocaleString("en-US")}
                 </span>
+              </TableCell>
+              <TableCell className="text-right">
+                {page.platform === "personal_zalo" ? (
+                  <span className={`text-base tabular-nums ${page.friendedZaloCount > 0 ? "text-violet-600 font-medium" : "text-muted-foreground"}`}>
+                    {page.friendedZaloCount.toLocaleString("en-US")}
+                  </span>
+                ) : (
+                  <span className="text-base tabular-nums text-muted-foreground/40">—</span>
+                )}
               </TableCell>
               <TableCell className="text-base text-right tabular-nums text-muted-foreground">
                 {page.commentConvCount.toLocaleString("en-US")}

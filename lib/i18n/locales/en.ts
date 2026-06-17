@@ -78,6 +78,7 @@ const en = {
       total: "Total",
       inbox: "Inbox",
       activeReply: "Active Cust.",
+      friendedZalo: "Zalo Friended",
       comment: "Comment",
       late: "Late",
       onTime: "On-time",

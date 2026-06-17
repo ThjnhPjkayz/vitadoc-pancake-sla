@@ -78,6 +78,7 @@ const zh = {
       total: "总计",
       inbox: "私信",
       activeReply: "活跃客户",
+      friendedZalo: "已加Zalo好友",
       comment: "评论",
       late: "超时",
       onTime: "按时",

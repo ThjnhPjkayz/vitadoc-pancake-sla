@@ -9,6 +9,8 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DATABASE_URL"] ?? "",
+    // CLI (migrate/db) dùng kết nối DIRECT (session mode) để tránh lỗi advisory lock
+    // qua pooler của Neon. Runtime client vẫn dùng DATABASE_URL (pooler) theo schema.
+    url: process.env["DIRECT_URL"] ?? process.env["DATABASE_URL"] ?? "",
   },
 });
