@@ -109,8 +109,6 @@ export default function PageLeaderboard({
             <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">{t.pages.col.comment}</TableHead>
             <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">{t.pages.col.lateInbox}</TableHead>
             <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">{t.pages.col.lateComment}</TableHead>
-            <TableHead className="text-xs font-semibold uppercase tracking-wider text-right text-emerald-700">{t.pages.col.onTimeInbox}</TableHead>
-            <TableHead className="text-xs font-semibold uppercase tracking-wider text-right text-emerald-700">{t.pages.col.onTimeComment}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -154,16 +152,6 @@ export default function PageLeaderboard({
               <TableCell className="text-right">
                 <span className={`text-base font-semibold tabular-nums ${page.lateCommentCount > 0 ? "text-red-600" : "text-muted-foreground"}`}>
                   {page.lateCommentCount.toLocaleString("en-US")}
-                </span>
-              </TableCell>
-              <TableCell className="text-right">
-                <span className={`text-base tabular-nums ${page.onTimeInboxCount > 0 ? "text-emerald-600 font-medium" : "text-muted-foreground"}`}>
-                  {page.onTimeInboxCount.toLocaleString("en-US")}
-                </span>
-              </TableCell>
-              <TableCell className="text-right">
-                <span className={`text-base tabular-nums ${page.onTimeCommentCount > 0 ? "text-emerald-600 font-medium" : "text-muted-foreground"}`}>
-                  {page.onTimeCommentCount.toLocaleString("en-US")}
                 </span>
               </TableCell>
             </TableRow>
