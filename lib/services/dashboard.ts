@@ -101,6 +101,7 @@ export interface PageSummary {
   total: number;
   inboxConvCount: number;   // số hội thoại INBOX (khách chủ động) trong kỳ
   commentConvCount: number; // số hội thoại COMMENT trong kỳ
+  activeReplyInboxCount: number; // số khách reply tích cực (≥2 lượt qua lại) với inbox
   lateCount: number;
   lateInboxCount: number;
   lateCommentCount: number;
@@ -365,6 +366,29 @@ export async function getPageSummaries(dateFrom?: Date, dateTo?: Date): Promise<
     GROUP BY p.id, p.name, p.platform
   `);
 
+  // Khách "reply tích cực" với INBOX: trong hội thoại có tin của khách gửi SAU
+  // phản hồi đầu tiên của bác sĩ (khách nhắn → bác sĩ trả lời → khách nhắn tiếp).
+  // Đếm số khách (customerId) khác nhau theo page, cùng bộ lọc kỳ.
+  const activeRows = await prisma.$queryRaw<Array<{ pageId: string; activeReplyCount: bigint }>>(Prisma.sql`
+    SELECT s."pageId" AS "pageId", COUNT(DISTINCT c."customerId") AS "activeReplyCount"
+    FROM "SLAViolation" s
+    JOIN "Conversation" c ON c.id = s."conversationId"
+    JOIN LATERAL (
+      SELECT MAX(m."insertedAt") FILTER (WHERE m."isFromCustomer") AS last_cust,
+             MIN(m."insertedAt") FILTER (WHERE m."isFromAdmin")    AS first_admin
+      FROM "Message" m
+      WHERE m."conversationId" = s."conversationId"
+    ) act ON true
+    WHERE s."conversationType" = 'INBOX'
+      AND c."customerId" IS NOT NULL
+      AND act.last_cust IS NOT NULL
+      AND act.first_admin IS NOT NULL
+      AND act.last_cust > act.first_admin
+      ${dateFilter}
+    GROUP BY s."pageId"
+  `);
+  const activeMap = new Map(activeRows.map((r) => [r.pageId, Number(r.activeReplyCount)]));
+
   return rows
     .map((r) => {
       const total = Number(r.total);
@@ -380,6 +404,7 @@ export async function getPageSummaries(dateFrom?: Date, dateTo?: Date): Promise<
         total,
         inboxConvCount: Number(r.inboxConvCount),
         commentConvCount: Number(r.commentConvCount),
+        activeReplyInboxCount: activeMap.get(r.pageId) ?? 0,
         lateCount,
         lateInboxCount: Number(r.lateInboxCount),
         lateCommentCount: Number(r.lateCommentCount),

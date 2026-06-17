@@ -77,6 +77,7 @@ const zh = {
       page: "主页",
       total: "总计",
       inbox: "私信",
+      activeReply: "活跃客户",
       comment: "评论",
       late: "超时",
       onTime: "按时",

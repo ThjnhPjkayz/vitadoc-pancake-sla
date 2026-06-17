@@ -106,6 +106,7 @@ export default function PageLeaderboard({
             <TableHead className="text-xs font-semibold uppercase tracking-wider">{t.pages.col.page}</TableHead>
             <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">{t.pages.col.total}</TableHead>
             <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">{t.pages.col.inbox}</TableHead>
+            <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">{t.pages.col.activeReply}</TableHead>
             <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">{t.pages.col.comment}</TableHead>
             <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">{t.pages.col.lateInbox}</TableHead>
             <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">{t.pages.col.lateComment}</TableHead>
@@ -140,6 +141,11 @@ export default function PageLeaderboard({
               </TableCell>
               <TableCell className="text-base text-right tabular-nums text-muted-foreground">
                 {page.inboxConvCount.toLocaleString("en-US")}
+              </TableCell>
+              <TableCell className="text-right">
+                <span className={`text-base tabular-nums ${page.activeReplyInboxCount > 0 ? "text-sky-600 font-medium" : "text-muted-foreground"}`}>
+                  {page.activeReplyInboxCount.toLocaleString("en-US")}
+                </span>
               </TableCell>
               <TableCell className="text-base text-right tabular-nums text-muted-foreground">
                 {page.commentConvCount.toLocaleString("en-US")}

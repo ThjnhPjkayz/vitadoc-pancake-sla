@@ -77,6 +77,7 @@ const en = {
       page: "Page",
       total: "Total",
       inbox: "Inbox",
+      activeReply: "Active Cust.",
       comment: "Comment",
       late: "Late",
       onTime: "On-time",

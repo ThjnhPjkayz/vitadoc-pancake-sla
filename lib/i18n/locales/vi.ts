@@ -79,6 +79,7 @@ const vi: Messages = {
       page: "Trang",
       total: "Tổng",
       inbox: "Inbox",
+      activeReply: "KH tích cực",
       comment: "Comment",
       late: "Trễ",
       onTime: "Đúng hạn",
