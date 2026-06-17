@@ -112,6 +112,7 @@ interface FilterState {
   pageId: string;
   platform: string;
   slaStatus: string;
+  tags: string[];
   hoursFilter: string;
 }
 
@@ -207,15 +208,17 @@ export default function ConversationTab({
   const [typeStats, setTypeStats] = useState<TypeStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
 
-  const [filterOptions, setFilterOptions] = useState<{ pages: FilterOption[]; platforms: string[] }>({
+  const [filterOptions, setFilterOptions] = useState<{ pages: FilterOption[]; platforms: string[]; tags: string[] }>({
     pages: [],
     platforms: [],
+    tags: [],
   });
   const [filters, setFilters] = useState<FilterState>({
     search: "",
     pageId: initialPageId,
     platform: "",
     slaStatus: initialSlaStatus,
+    tags: [],
     hoursFilter: "",
   });
   const [tableData, setTableData] = useState<ConversationRow[]>([]);
@@ -270,6 +273,7 @@ export default function ConversationTab({
       if (filters.pageId) params.set("pageId", filters.pageId);
       if (filters.platform) params.set("platform", filters.platform);
       if (filters.slaStatus) params.set("slaStatus", filters.slaStatus);
+      filters.tags.forEach((tag) => params.append("tags", tag));
       if (filters.hoursFilter) params.set("hoursFilter", filters.hoursFilter);
       if (dateFrom) params.set("dateFrom", dateFrom);
       if (dateTo) params.set("dateTo", dateTo);
@@ -311,6 +315,7 @@ export default function ConversationTab({
       if (filters.pageId) params.set("pageId", filters.pageId);
       if (filters.platform) params.set("platform", filters.platform);
       if (filters.slaStatus) params.set("slaStatus", filters.slaStatus);
+      filters.tags.forEach((tag) => params.append("tags", tag));
       if (filters.hoursFilter) params.set("hoursFilter", filters.hoursFilter);
       if (dateFrom) params.set("dateFrom", dateFrom);
       if (dateTo) params.set("dateTo", dateTo);
@@ -360,6 +365,7 @@ export default function ConversationTab({
         onFilterChange={(f) => { setFilters(f); setTablePage(1); }}
         pages={filterOptions.pages}
         platforms={filterOptions.platforms}
+        tags={filterOptions.tags}
       />
 
       <ConversationsTable

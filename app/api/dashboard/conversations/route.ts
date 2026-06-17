@@ -31,12 +31,15 @@ export async function GET(request: Request) {
     const conversationType =
       typeRaw === "INBOX" || typeRaw === "COMMENT" ? typeRaw : undefined;
 
+    const tags = searchParams.getAll("tags").filter(Boolean);
+
     const result = await getConversations({
       search: searchParams.get("search") ?? undefined,
       pageId: searchParams.get("pageId") ?? undefined,
       platform: searchParams.get("platform") ?? undefined,
       conversationType,
       slaStatus,
+      tags: tags.length > 0 ? tags : undefined,
       hoursFilter,
       dateFrom: searchParams.get("dateFrom") ?? undefined,
       dateTo: searchParams.get("dateTo") ?? undefined,

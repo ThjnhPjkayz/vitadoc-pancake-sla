@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { MultiSelect } from "@/components/ui/multi-select";
 import { useI18n } from "@/lib/i18n";
 
 interface FilterOption {
@@ -25,11 +26,13 @@ interface FiltersBarProps {
     pageId: string;
     platform: string;
     slaStatus: string;
+    tags: string[];
     hoursFilter: string;
   };
   onFilterChange: (filters: FiltersBarProps["filters"]) => void;
   pages: FilterOption[];
   platforms: string[];
+  tags: string[];
 }
 
 const PLATFORM_LABELS: Record<string, string> = {
@@ -55,6 +58,7 @@ export default function FiltersBar({
   onFilterChange,
   pages,
   platforms,
+  tags,
 }: FiltersBarProps) {
   const { t } = useI18n();
   const [localSearch, setLocalSearch] = useState(filters.search);
@@ -76,6 +80,7 @@ export default function FiltersBar({
     filters.pageId ||
     filters.platform ||
     filters.slaStatus ||
+    filters.tags.length > 0 ||
     filters.hoursFilter;
 
   const SLA_STATUS_OPTIONS = [
@@ -183,6 +188,18 @@ export default function FiltersBar({
         </Select>
       </FilterField>
 
+      {/* Tags filter (multi-select) */}
+      <FilterField label={t.filters.tags}>
+        <MultiSelect
+          options={tags}
+          selected={filters.tags}
+          onChange={(vals) => onFilterChange({ ...filters, tags: vals })}
+          placeholder={t.filters.allTags}
+          emptyText={t.filters.noTags}
+          className="min-w-[160px]"
+        />
+      </FilterField>
+
       {/* Hours filter */}
       <FilterField label={t.filters.hours}>
         <Select
@@ -213,6 +230,7 @@ export default function FiltersBar({
               pageId: "",
               platform: "",
               slaStatus: "",
+              tags: [],
               hoursFilter: "",
             })
           }

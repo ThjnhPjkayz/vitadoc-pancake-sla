@@ -49,6 +49,7 @@ export interface ConversationFilter {
   platform?: string;
   conversationType?: "INBOX" | "COMMENT";
   slaStatus?: "on-time" | "late" | "no-reply" | "needs-attention" | "outbound";
+  tags?: string[]; // lọc hội thoại có ÍT NHẤT một trong các tag (OR)
   hoursFilter?: "in-hours" | "after-hours";
   dateFrom?: string;
   dateTo?: string;
@@ -491,6 +492,7 @@ export async function getConversations(
     platform,
     conversationType,
     slaStatus,
+    tags,
     hoursFilter,
     dateFrom,
     dateTo,
@@ -543,6 +545,8 @@ export async function getConversations(
   const where: Record<string, unknown> = {};
   if (pageId) where.pageId = pageId;
   if (Object.keys(pageWhere).length > 0) where.page = pageWhere;
+  // Lọc theo tag (multi-select, OR): hội thoại có ít nhất một tag được chọn
+  if (tags && tags.length > 0) where.conversation = { tags: { hasSome: tags } };
 
   const [data, total] = await Promise.all([
     prisma.sLAViolation.findMany({
@@ -664,8 +668,9 @@ export async function getConversationTypeStats(
 export async function getFilterOptions(): Promise<{
   pages: PageFilter[];
   platforms: string[];
+  tags: string[];
 }> {
-  const [pages, platforms] = await Promise.all([
+  const [pages, platforms, tagRows] = await Promise.all([
     prisma.page.findMany({
       where: { isActivated: true },
       select: { id: true, name: true, platform: true },
@@ -676,11 +681,18 @@ export async function getFilterOptions(): Promise<{
       distinct: ["platform"],
       select: { platform: true },
     }),
+    // Danh sách tag distinct (unnest mảng tags của mọi conversation)
+    prisma.$queryRaw<Array<{ tag: string }>>(Prisma.sql`
+      SELECT DISTINCT unnest("tags") AS tag
+      FROM "Conversation"
+      ORDER BY tag ASC
+    `),
   ]);
 
   return {
     pages,
     platforms: platforms.map((p) => p.platform),
+    tags: tagRows.map((r) => r.tag).filter(Boolean),
   };
 }
 
