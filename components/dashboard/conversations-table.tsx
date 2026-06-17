@@ -49,6 +49,7 @@ interface ConversationRow {
   isLateReply: boolean;
   hasReply: boolean;
   isOutbound: boolean;
+  tags: string[];
   customerMessageAt: string | null;
   adminReplyAt: string | null;
   conversationType: string;
@@ -214,6 +215,39 @@ export default function ConversationsTable({
             <span className="text-sm text-zinc-600 max-w-[220px] block truncate" title={msg}>
               {msg}
             </span>
+          );
+        },
+      },
+      {
+        id: "tags",
+        header: t.table.col.tags,
+        accessorKey: "tags",
+        enableSorting: false,
+        cell: ({ row }) => {
+          const tags = row.original.tags ?? [];
+          if (tags.length === 0)
+            return <span className="text-muted-foreground/40 text-sm">—</span>;
+          return (
+            <div className="flex flex-wrap gap-1 max-w-[180px]">
+              {tags.slice(0, 3).map((tag) => (
+                <Badge
+                  key={tag}
+                  variant="outline"
+                  className={`text-[10px] px-1.5 py-0 h-4 font-normal ${
+                    tag === "Đã kết bạn"
+                      ? "bg-violet-50 text-violet-700 border-violet-200"
+                      : "bg-muted text-muted-foreground border-transparent"
+                  }`}
+                >
+                  {tag}
+                </Badge>
+              ))}
+              {tags.length > 3 && (
+                <span className="text-[10px] text-muted-foreground" title={tags.join(", ")}>
+                  +{tags.length - 3}
+                </span>
+              )}
+            </div>
           );
         },
       },

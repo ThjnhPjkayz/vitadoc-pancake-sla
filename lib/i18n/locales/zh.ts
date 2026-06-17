@@ -146,6 +146,7 @@ const zh = {
       customer: "客户",
       type: "类型",
       lastMessage: "最新消息",
+      tags: "标签",
       responseTime: "响应时间",
       sla: "SLA",
       hours: "时段",

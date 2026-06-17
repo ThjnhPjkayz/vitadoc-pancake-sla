@@ -70,6 +70,7 @@ export interface ConversationRow {
   isLateReply: boolean;
   hasReply: boolean;
   isOutbound: boolean;
+  tags: string[];
   customerMessageAt: string | null;
   adminReplyAt: string | null;
   conversationType: string;
@@ -554,6 +555,7 @@ export async function getConversations(
             snippet: true,
             customerName: true,
             customerUsername: true,
+            tags: true,
           },
         },
         page: {
@@ -583,6 +585,7 @@ export async function getConversations(
       isLateReply: row.isLateReply,
       hasReply: row.responseTimeMinutes !== null,
       isOutbound: row.slaStatus === "outbound",
+      tags: row.conversation.tags ?? [],
       customerMessageAt: row.customerMessageAt?.toISOString() ?? null,
       adminReplyAt: row.adminReplyAt?.toISOString() ?? null,
       conversationType: row.conversation.type,

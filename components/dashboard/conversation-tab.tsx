@@ -133,6 +133,7 @@ interface ConversationRow {
   isLateReply: boolean;
   hasReply: boolean;
   isOutbound: boolean;
+  tags: string[];
   customerMessageAt: string | null;
   adminReplyAt: string | null;
   conversationType: string;
@@ -163,7 +164,7 @@ function exportToCSV(
     personal_zalo: "Zalo",
     tiktok_business_messaging: "TT Biz",
   };
-  const headers = ["Customer", "Username", "Page", "Platform", "SLA Status", "Response Time (min)", "Last Message", "Customer Msg Time", "CS Reply Time"];
+  const headers = ["Customer", "Username", "Page", "Platform", "SLA Status", "Response Time (min)", "Tags", "Last Message", "Customer Msg Time", "CS Reply Time"];
   const csvRows = [
     headers.join(","),
     ...rows.map((row) =>
@@ -174,6 +175,7 @@ function exportToCSV(
         PLATFORM_LABELS[row.platform] ?? row.platform,
         row.isOutbound ? statusLabels.outbound : !row.hasReply ? statusLabels.noReply : row.isLateReply ? statusLabels.late : statusLabels.onTime,
         row.responseTimeMinutes ?? "",
+        `"${(row.tags ?? []).join("; ").replace(/"/g, '""')}"`,
         `"${(row.lastMessage ?? "").replace(/"/g, '""')}"`,
         row.customerMessageAt ? new Date(row.customerMessageAt).toLocaleString(dateLocale) : "",
         row.adminReplyAt ? new Date(row.adminReplyAt).toLocaleString(dateLocale) : "",

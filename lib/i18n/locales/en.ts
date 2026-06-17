@@ -146,6 +146,7 @@ const en = {
       customer: "Customer",
       type: "Type",
       lastMessage: "Last Message",
+      tags: "Tags",
       responseTime: "Response Time",
       sla: "SLA",
       hours: "Hours",

@@ -171,6 +171,7 @@ const vi: Messages = {
       customer: "Khách hàng",
       type: "Loại",
       lastMessage: "Tin nhắn cuối",
+      tags: "Tags",
       responseTime: "Thời gian phản hồi",
       sla: "SLA",
       hours: "Ca làm",
