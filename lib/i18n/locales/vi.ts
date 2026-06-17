@@ -73,7 +73,7 @@ const vi: Messages = {
     title: "Trang",
     description: "Hiệu suất SLA theo trang",
     leaderboardTitle: "Xếp hạng trang",
-    sortedByNote: "Sắp xếp theo số lượng trễ",
+    sortedByNote: "Sắp xếp theo tổng hội thoại",
     noPageData: "Chưa có dữ liệu trang",
     filter: {
       yesterday: "Hôm qua",

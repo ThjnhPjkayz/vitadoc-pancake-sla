@@ -475,7 +475,7 @@ export async function getPageSummaries(dateFrom?: Date, dateTo?: Date): Promise<
         lateRate: resolvedCount > 0 ? lateCount / resolvedCount : 0,
       };
     })
-    .sort((a, b) => b.lateCount - a.lateCount);
+    .sort((a, b) => b.total - a.total);
 }
 
 // ----------------------------------------------------------------

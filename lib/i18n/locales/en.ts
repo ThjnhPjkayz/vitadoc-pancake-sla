@@ -71,7 +71,7 @@ const en = {
     title: "Pages",
     description: "SLA performance by page",
     leaderboardTitle: "Page Leaderboard",
-    sortedByNote: "Sorted by late count",
+    sortedByNote: "Sorted by total conversations",
     noPageData: "No page data yet",
     filter: {
       yesterday: "Yesterday",

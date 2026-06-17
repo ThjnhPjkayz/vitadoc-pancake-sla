@@ -71,7 +71,7 @@ const zh = {
     title: "主页",
     description: "各主页 SLA 表现",
     leaderboardTitle: "主页排行榜",
-    sortedByNote: "按超时数量排序",
+    sortedByNote: "按对话总数排序",
     noPageData: "暂无主页数据",
     filter: {
       yesterday: "昨天",
