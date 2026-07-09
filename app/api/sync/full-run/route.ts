@@ -52,10 +52,12 @@ export async function POST(request: Request) {
 
   let syncId: string;
   let resume: ResumeData;
+  let jobStartedAt: Date;
 
   if (isResume && existingRecord) {
     syncId = existingRecord.id;
     resume = existingRecord.resumeData as unknown as ResumeData;
+    jobStartedAt = existingRecord.startedAt;
     console.log(`[FullSync] ▶️ Resuming job ${syncId} — done: [${resume.donePageIds.join(", ")}], current: ${resume.currentPageId}, cursor: ${resume.currentCursor}`);
   } else {
     // Đánh stale nếu có record running không có resumeData
@@ -90,7 +92,27 @@ export async function POST(request: Request) {
     });
     syncId = record.id;
     resume = { donePageIds: [], currentPageId: null, currentCursor: null, totals: { conversations: 0, messages: 0, slaChecked: 0, pages: 0 } };
+    jobStartedAt = new Date();
     console.log(`[FullSync] 🚀 Starting new full sync job ${syncId} — ${pages.length} pages`);
+  }
+
+  // 🛡️ Trần tổng thời gian cho CẢ CHUỖI self-chain (không phải 1 lần gọi).
+  // Nếu 1 page kẹt mãi (lỗi lặp lại, không tiến được), chuỗi có thể tự gọi lại vô
+  // hạn qua waitUntil — mỗi vòng ~200s CPU, rất tốn Fluid Active CPU. Chặn cứng ở đây.
+  const MAX_TOTAL_RUNTIME_MS = 30 * 60 * 1000; // 30 phút kể từ lần đầu job này chạy
+  if (Date.now() - jobStartedAt.getTime() > MAX_TOTAL_RUNTIME_MS) {
+    console.error(`[FullSync] 🛑 Job ${syncId} vượt trần 30 phút — dừng hẳn, không chain tiếp.`);
+    await prisma.syncHistory.update({
+      where: { id: syncId },
+      data: {
+        status: "failed",
+        completedAt: new Date(),
+        resumeData: undefined,
+        progressSnapshot: { isRunning: false },
+        errors: ["Full sync vượt trần 30 phút tổng thời gian — dừng để tránh lặp vô hạn"],
+      },
+    });
+    return Response.json({ success: false, status: "aborted_max_runtime" });
   }
 
   const runStats: SyncStats = {
@@ -170,6 +192,19 @@ export async function POST(request: Request) {
   }
 
   if (timedOut) {
+    // 🛡️ Kiểm tra lại trạng thái TRƯỚC khi tự gọi lại: nếu record đã bị hủy
+    // (vd nút Reset / DELETE /api/sync) thì DỪNG HẲN — không chain tiếp. Nếu không
+    // check, việc "Reset" chỉ đổi status trong DB mà chain vẫn tự gọi lại và (do
+    // không còn tìm thấy record 'running') sẽ hiểu nhầm thành khởi động job MỚI.
+    const current = await prisma.syncHistory.findUnique({
+      where: { id: syncId },
+      select: { status: true },
+    });
+    if (current?.status !== "running") {
+      console.log(`[FullSync] ⛔ Job ${syncId} đã bị hủy (status=${current?.status}) — dừng, không chain tiếp.`);
+      return Response.json({ success: true, status: "stopped_cancelled" });
+    }
+
     const baseUrl = (process.env.NEXTAUTH_URL ?? "").replace(/\/$/, "");
     console.log(`[FullSync] ⏱️ Timed out — chaining next run via ${baseUrl}/api/sync/full-run`);
 
